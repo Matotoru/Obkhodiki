@@ -48,6 +48,11 @@ internal sealed class TrayContext : ApplicationContext
             _pendingUpdateProduct = null;
             _tray.ShowBalloonTip(5000, title, text, icon);
         }, null);
+        _controller.ConfirmInsecureServer = () => Dialogs.Confirm(
+            "В ссылке отключена проверка сертификата (insecure=1).\n\n" +
+            "Тогда оборудование по пути (например, ТСПУ) может выдать себя за ваш сервер, узнать пароль и видеть трафик туннеля. " +
+            "Надёжнее выпустить на сервере настоящий сертификат (например, Let's Encrypt).\n\nВсё равно сохранить?",
+            "ZapretHub — VPS", MessageBoxIcon.Warning);
         _controller.ConfirmStopForeignTg = () => Dialogs.Confirm(
             "Уже запущен отдельно установленный TG WS Proxy. Он занимает тот же порт, что и прокси ZapretHub.\n\n" +
             "Закрыть его и запустить прокси из ZapretHub?",
@@ -58,6 +63,7 @@ internal sealed class TrayContext : ApplicationContext
             _updateBalloonProduct = null;
             if (product == "Flowseal") await _controller.InstallAvailableUpdateAsync();
             else if (product == AppController.TgProductName) await _controller.InstallAvailableTgUpdateAsync();
+            else if (product == AppController.SingBoxProductName) await _controller.InstallAvailableSbUpdateAsync();
         };
         _tray.BalloonTipClosed += (_, _) => _updateBalloonProduct = null;
         _controller.ConfirmUpdate = (product, version, current) => Dialogs.Confirm(
@@ -110,6 +116,16 @@ internal sealed class TrayContext : ApplicationContext
             });
             anyUpdate = true;
         }
+        if (_controller.AvailableSbUpdate is { } sbUpdate)
+        {
+            _menu.Items.Add(new ToolStripMenuItem($"⬆ Установить sing-box {sbUpdate.Version}…", null,
+                async (_, _) => await _controller.InstallAvailableSbUpdateAsync())
+            {
+                Enabled = !busy,
+                Font = _boldFont,
+            });
+            anyUpdate = true;
+        }
         if (_controller.AvailableTgUpdate is { } tgUpdate)
         {
             _menu.Items.Add(new ToolStripMenuItem($"⬆ Установить TG WS Proxy {tgUpdate.Version}…", null,
@@ -146,6 +162,7 @@ internal sealed class TrayContext : ApplicationContext
 
         _menu.Items.Add(BuildGamesMenu(ready));
         _menu.Items.Add(BuildTelegramMenu(busy));
+        _menu.Items.Add(BuildVpnMenu(busy));
 
         var game = new ToolStripMenuItem("Игровой фильтр") { Enabled = ready };
         foreach (var (mode, title) in new[]
@@ -216,6 +233,21 @@ internal sealed class TrayContext : ApplicationContext
             item.DropDownItems.Add(new ToolStripMenuItem(profile.Enabled ? "Выключить" : "Включить", null,
                 async (_, _) => await _controller.SetGameProfileEnabledAsync(id, !profile.Enabled)) { Font = _boldFont });
             item.DropDownItems.Add("Дообучить (записать ещё)…", null, (_, _) => OpenLearn(profile));
+            var route = new ToolStripMenuItem("Маршрут");
+            foreach (var (value, title) in new[]
+                     {
+                         (GameRoute.Direct, "Напрямую (zapret)"),
+                         (GameRoute.Vpn, "Через VPS"),
+                         (GameRoute.Auto, "Авто — выбрать при запуске игры"),
+                     })
+            {
+                route.DropDownItems.Add(new ToolStripMenuItem(title, null, async (_, _) => await _controller.SetGameRouteAsync(id, value))
+                {
+                    Checked = profile.Route == value,
+                    Enabled = value == GameRoute.Direct || _controller.VpnServerName is not null,
+                });
+            }
+            item.DropDownItems.Add(route);
             item.DropDownItems.Add("Открыть список адресов", null, (_, _) => OpenInNotepad(AppController.GameIpsetPath(id)));
             item.DropDownItems.Add(new ToolStripSeparator());
             item.DropDownItems.Add("Удалить", null, async (_, _) =>
@@ -266,6 +298,57 @@ internal sealed class TrayContext : ApplicationContext
         });
         return telegram;
     }
+
+    private ToolStripMenuItem BuildVpnMenu(bool busy)
+    {
+        var vpn = new ToolStripMenuItem("VPS (Hysteria2)") { Checked = _controller.IsVpnRunning };
+        var server = _controller.VpnServerName;
+        vpn.DropDownItems.Add(new ToolStripMenuItem(server is null ? "Добавить сервер…" : $"Сервер: {server}…", null, (_, _) => OpenServerForm())
+        {
+            Enabled = !busy,
+            Font = server is null ? _boldFont : null,
+        });
+        vpn.DropDownItems.Add(new ToolStripMenuItem("Программы и сайты через VPS…", null, (_, _) => OpenListsForm())
+        {
+            Enabled = !busy && server is not null,
+        });
+        vpn.DropDownItems.Add(new ToolStripMenuItem("Качество канала…", null, (_, _) => OpenQualityForm())
+        {
+            Enabled = !busy && server is not null,
+        });
+        vpn.DropDownItems.Add(new ToolStripSeparator());
+        vpn.DropDownItems.Add(new ToolStripMenuItem(
+            $"Проверить обновления sing-box (сейчас {_controller.SingBoxVersion ?? "не установлен"})", null,
+            async (_, _) => await _controller.CheckSingBoxUpdateManuallyAsync())
+        {
+            Enabled = !busy && _controller.SingBoxVersion is not null,
+        });
+        return vpn;
+    }
+
+    private readonly Dictionary<Type, Form> _vpnForms = new();
+
+    // One window of each kind; opening another kind does not just bring the first one forward.
+    private void ShowSingle<T>(Func<T> create) where T : Form
+    {
+        if (_vpnForms.TryGetValue(typeof(T), out var open) && !open.IsDisposed)
+        {
+            open.Activate();
+            return;
+        }
+        var form = create();
+        _vpnForms[typeof(T)] = form;
+        form.FormClosed += (_, _) =>
+        {
+            _vpnForms.Remove(typeof(T));
+            form.Dispose();
+        };
+        form.Show();
+    }
+
+    private void OpenServerForm() => ShowSingle(() => new VpnServerForm(_controller));
+    private void OpenListsForm() => ShowSingle(() => new VpnListsForm(_controller));
+    private void OpenQualityForm() => ShowSingle(() => new QualityForm(_controller));
 
     private void OpenLearn(GameProfile? profile)
     {
@@ -369,6 +452,7 @@ internal sealed class TrayContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         _autoSelectForm?.Dispose();
+        foreach (var f in _vpnForms.Values.ToList()) f.Dispose();
         _learnForm?.Dispose();
         _tray.Visible = false;
         try

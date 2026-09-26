@@ -27,6 +27,14 @@ internal static class AppPaths
     /// <summary>Downloaded tg-ws-proxy builds (admin-only folder; the proxy itself runs as the normal user).</summary>
     public static readonly string TgRoot = Path.Combine(Root, "telegram");
 
+    /// <summary>VPS tunnel: sing-box builds, generated config and the encrypted server link.
+    /// Locked to Administrators/SYSTEM only (see SecureStorage) — unlike the rest of Root, not readable by users.</summary>
+    public static readonly string VpnRoot = Path.Combine(Root, "vpn");
+    public static readonly string SingBoxRoot = Path.Combine(VpnRoot, "engine");
+    public static readonly string VpnConfig = Path.Combine(VpnRoot, "config.json");
+    public static readonly string VpnServerFile = Path.Combine(VpnRoot, "server.bin");
+    public static readonly string SingBoxLog = Path.Combine(VpnRoot, "sing-box.log");
+
     public static readonly string UserData = Path.Combine(Root, "user");
     public static readonly string UserLists = Path.Combine(UserData, "lists");
     public static readonly string Targets = Path.Combine(UserData, "targets.txt");

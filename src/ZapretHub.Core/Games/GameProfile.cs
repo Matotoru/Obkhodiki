@@ -13,7 +13,15 @@ public sealed class GameProfile
     public string? ProcessName { get; set; }
     public string TcpPorts { get; set; } = "";
     public string UdpPorts { get; set; } = "";
+
+    /// <summary>Which way the game's traffic goes: through zapret, through the VPS, or decided at game start.</summary>
+    public GameRoute Route { get; set; } = GameRoute.Direct;
+
+    /// <summary>"ip:port" TCP endpoints the game used while learning; the path quality is measured against them.</summary>
+    public List<string> ProbeEndpoints { get; set; } = new();
 }
+
+public enum GameRoute { Direct, Vpn, Auto }
 
 public static partial class GameProfiles
 {
@@ -62,6 +70,9 @@ public static partial class GameProfiles
         {
             if (p is null || !IsValidId(p.Id) || !seen.Add(p.Id)) continue;
             p.Name = string.IsNullOrWhiteSpace(p.Name) ? p.Id : p.Name;
+            if (!Enum.IsDefined(p.Route)) p.Route = GameRoute.Direct;
+            p.ProbeEndpoints = SanitizeEndpoints(p.ProbeEndpoints);
+            if (p.ProcessName is not null && !Vpn.SingBoxConfig.IsValidProcessName(p.ProcessName)) p.ProcessName = null;
             try
             {
                 p.TcpPorts = PortSet.Parse(p.TcpPorts ?? "").ToString();
@@ -77,6 +88,20 @@ public static partial class GameProfiles
         }
         return result;
     }
+
+    public const int MaxProbeEndpoints = 8;
+
+    /// <summary>Keeps well-formed public "ip:port" entries only, de-duplicated and capped.</summary>
+    public static List<string> SanitizeEndpoints(IEnumerable<string>? endpoints) =>
+        (endpoints ?? Enumerable.Empty<string>())
+            .Select(e => System.Net.IPEndPoint.TryParse(e ?? "", out var ep) && ep.Port > 0 && TrafficLearner.IsPublic(ep.Address) ? ep.ToString() : null)
+            .Where(e => e is not null)
+            .Select(e => e!)
+            .Distinct()
+            // Only TLS endpoints can be measured; keep them when capping.
+            .OrderBy(e => Vpn.TlsPing.IsTlsPort(System.Net.IPEndPoint.Parse(e).Port) ? 0 : 1)
+            .Take(MaxProbeEndpoints)
+            .ToList();
 
     private static readonly Dictionary<char, string> Translit = new()
     {

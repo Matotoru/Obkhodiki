@@ -21,6 +21,9 @@ internal static class SecureStorage
         // Created together with its security descriptor: creating first and locking later would leave a
         // window where the inherited %ProgramData% ACL lets any user create (and own) subfolders.
         CreateOrLock(AppPaths.Root, RootAcl());
+        // Secrets (VPS password, sing-box config) and logs (visited endpoints): not even readable by other users.
+        CreateOrLock(AppPaths.VpnRoot, AdminOnlyAcl());
+        CreateOrLock(Path.GetDirectoryName(AppPaths.Log)!, AdminOnlyAcl());
         var rebuilt = RebuildUserFoldersIfLoose();
         Directory.CreateDirectory(AppPaths.GamesDir); // inherits the admin-only root ACL
 
@@ -200,6 +203,16 @@ internal static class SecureStorage
         {
             info.Create(acl);
         }
+    }
+
+    private static DirectorySecurity AdminOnlyAcl()
+    {
+        var sec = new DirectorySecurity();
+        sec.SetOwner(Admins);
+        sec.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        sec.AddAccessRule(Inherited(Admins, FileSystemRights.FullControl));
+        sec.AddAccessRule(Inherited(System, FileSystemRights.FullControl));
+        return sec;
     }
 
     private static DirectorySecurity RootAcl()

@@ -107,7 +107,7 @@ public sealed class WinwsRunner : IEngineRunner, IDisposable
             process.WaitForExit();
             var code = process.ExitCode;
             process.Dispose();
-            throw new InvalidOperationException($"winws exited with code {code}:{Environment.NewLine}{OutputTail()}");
+            throw new InvalidOperationException($"{Path.GetFileName(exe)} exited with code {code}:{Environment.NewLine}{OutputTail()}");
         }
 
         lock (_gate)

@@ -256,6 +256,10 @@ internal sealed class LearnGameForm : Form
             // Relearning adds to what the profile already knew rather than forgetting earlier sessions.
             TcpPorts = PortSet.Parse(_existing?.TcpPorts ?? "").Union(_learned.TcpPorts).ToString(),
             UdpPorts = PortSet.Parse(_existing?.UdpPorts ?? "").Union(_learned.UdpPorts).ToString(),
+            Route = _existing?.Route ?? GameRoute.Direct,
+            // Fresh endpoints first: they reflect where the game connects today.
+            ProbeEndpoints = GameProfiles.SanitizeEndpoints(
+                _learned.TcpEndpoints.Select(e => e.ToString()).Concat(_existing?.ProbeEndpoints ?? new List<string>())),
         };
         var saved = await _controller.SaveGameProfileAsync(profile, lines);
         if (!saved)

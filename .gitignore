@@ -12,3 +12,4 @@ TestResults/
 credentials.json
 secrets/
 *.hysteria.yaml
+publish-next/

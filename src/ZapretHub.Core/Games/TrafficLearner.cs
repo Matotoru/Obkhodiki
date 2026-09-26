@@ -17,6 +17,8 @@ public sealed class TrafficLearner
     private readonly Dictionary<IPAddress, bool> _addresses = new();
     private readonly HashSet<int> _tcpPorts = new();
     private readonly HashSet<int> _udpPorts = new();
+    private readonly List<IPEndPoint> _tcpEndpoints = new();
+    private const int MaxTcpEndpoints = 32;
 
     public IReadOnlyCollection<IPAddress> Addresses
     {
@@ -26,6 +28,12 @@ public sealed class TrafficLearner
     public IReadOnlyCollection<LearnedAddress> Endpoints
     {
         get { lock (_gate) return _addresses.Select(kv => new LearnedAddress(kv.Key, kv.Value)).ToList(); }
+    }
+
+    /// <summary>Distinct TCP endpoints in the order first seen (for path quality measurements).</summary>
+    public IReadOnlyList<IPEndPoint> TcpEndpoints
+    {
+        get { lock (_gate) return _tcpEndpoints.ToList(); }
     }
 
     public PortSet TcpPorts
@@ -49,6 +57,11 @@ public sealed class TrafficLearner
             var udp = flow.Protocol == FlowProtocol.Udp;
             _addresses[ip] = udp || (_addresses.TryGetValue(ip, out var seen) && seen);
             (flow.Protocol == FlowProtocol.Tcp ? _tcpPorts : _udpPorts).Add(flow.RemotePort);
+            if (!udp && _tcpEndpoints.Count < MaxTcpEndpoints)
+            {
+                var endpoint = new IPEndPoint(ip, flow.RemotePort);
+                if (!_tcpEndpoints.Contains(endpoint)) _tcpEndpoints.Add(endpoint);
+            }
         }
     }
 

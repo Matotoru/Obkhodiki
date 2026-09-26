@@ -29,6 +29,7 @@ internal sealed partial class AppController
         }
         await ApplySettingWithRollback(() => profile.Enabled, v => profile.Enabled = v, enabled);
         Log.Info($"Game profile {id} {(enabled ? "enabled" : "disabled")}");
+        await ReapplyVpnAfterProfileChangeAsync();
     });
 
     /// <summary>Creates or updates a profile; learned lines are merged into its existing address list.</summary>
@@ -58,6 +59,7 @@ internal sealed partial class AppController
             saved = true;
             Log.Info($"Game profile {profile.Id} saved: {merged.Count} networks, TCP {profile.TcpPorts}, UDP {profile.UdpPorts}");
 
+            await ReapplyVpnAfterProfileChangeAsync();
             if (!_runner.IsRunning || !profile.Enabled) return;
             try
             {
@@ -79,7 +81,9 @@ internal sealed partial class AppController
 
     public Task DeleteGameProfileAsync(string id) => Serialized("Удаление игры…", silentErrors: false, async () =>
     {
+        ForgetAutoRoute(Settings.GameProfiles.FirstOrDefault(p => p.Id == id)?.ProcessName);
         Settings.GameProfiles.RemoveAll(p => p.Id == id);
+        await ReapplyVpnAfterProfileChangeAsync();
         _settingsStore.Save(Settings);
         if (_runner.IsRunning) await StartCoreAsync();
         foreach (var path in new[] { GameIpsetPath(id), Path.Combine(AppPaths.GamesRuntimeDir, GameProfiles.IpsetFileName(id)) })

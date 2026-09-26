@@ -64,6 +64,15 @@ internal sealed partial class AppController : IDisposable
     {
         try
         {
+            // First, and on its own: a failure further down must not leave the VPS module without its game watch.
+            InitializeVpn();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("VPS module initialization failed", ex);
+        }
+        try
+        {
             UserLists.EnsureDefaults(AppPaths.UserLists);
             _engine = _store.GetActive();
             if (_engine is null)
@@ -79,6 +88,7 @@ internal sealed partial class AppController : IDisposable
                 await EnableAsync();
             }
             await StartTelegramIfWantedAsync();
+            await ApplyVpnAsync(interactive: false);
             if (Settings.CheckUpdatesOnStart && _engine is not null)
             {
                 await CheckForUpdateAsync(userInitiated: false);
@@ -86,6 +96,7 @@ internal sealed partial class AppController : IDisposable
             if (Settings.CheckUpdatesOnStart)
             {
                 await CheckTgUpdateAsync(userInitiated: false);
+                await CheckSingBoxUpdateAsync(userInitiated: false);
             }
         }
         catch (Exception ex)
@@ -493,6 +504,11 @@ internal sealed partial class AppController : IDisposable
             SetBusy(busyText);
             await action();
         }
+        catch (OperationCanceledException)
+        {
+            // Cancelled by the user (e.g. a window closed): not an error worth a balloon.
+            Log.Info(busyText + " cancelled");
+        }
         catch (Exception ex)
         {
             Log.Error(busyText, ex);
@@ -533,6 +549,7 @@ internal sealed partial class AppController : IDisposable
         {
             Log.Error("Stopping TG WS Proxy on exit failed", ex);
         }
+        DisposeVpn();
         _learningSession?.Dispose();
         _runner.Dispose();
         _http.Dispose();

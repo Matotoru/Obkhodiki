@@ -216,6 +216,21 @@ public sealed class TgProxyTests : IDisposable
         Assert.Null(result);
     }
 
+    // Nothing to roll back to: a first install that cannot start must not stay active.
+    [Fact]
+    public async Task Updater_FirstInstallFailsToStart_NothingLeftActive()
+    {
+        var (updater, store) = Create(Handler("v1.10.4", Exe()));
+        var release = await updater.CheckAsync(null, CancellationToken.None);
+
+        var ex = await Assert.ThrowsAsync<UpdateException>(() =>
+            updater.InstallAsync(release!, _ => throw new InvalidOperationException("broken"), null, CancellationToken.None));
+
+        Assert.True(ex.ReleaseDefect);
+        Assert.Null(store.ActiveVersion);
+        Assert.False(Directory.Exists(Path.Combine(_root, "versions", "1.10.4")));
+    }
+
     [Fact]
     public async Task Updater_FirstInstall_WithoutPreviousVersion()
     {

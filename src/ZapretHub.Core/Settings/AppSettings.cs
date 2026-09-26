@@ -28,6 +28,15 @@ public sealed class AppSettings
 
     /// <summary>A tg-ws-proxy release the user declined or that failed; background checks skip it.</summary>
     public string? TelegramSkippedVersion { get; set; }
+
+    /// <summary>Programs (exe names) whose traffic always goes through the VPS.</summary>
+    public List<string> VpnProcesses { get; set; } = new();
+
+    /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
+    public List<string> VpnDomains { get; set; } = new();
+
+    /// <summary>A sing-box release the user declined or that failed; background checks skip it.</summary>
+    public string? SingBoxSkippedVersion { get; set; }
 }
 
 public sealed class AppSettingsStore
@@ -84,6 +93,10 @@ public sealed class AppSettingsStore
         if (!IsValidRange(s.GameTcpRange)) s.GameTcpRange = GameFilterOptions.DefaultRange;
         if (!IsValidRange(s.GameUdpRange)) s.GameUdpRange = GameFilterOptions.DefaultRange;
         s.GameProfiles = Games.GameProfiles.Sanitize(s.GameProfiles);
+        s.VpnProcesses = (s.VpnProcesses ?? new()).Where(p => p is not null && Vpn.SingBoxConfig.IsValidProcessName(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        s.VpnDomains = (s.VpnDomains ?? new()).Select(d => d is null ? null : Vpn.SingBoxConfig.NormalizeDomain(d))
+            .Where(d => d is not null).Select(d => d!).Distinct().ToList();
         return s;
     }
 

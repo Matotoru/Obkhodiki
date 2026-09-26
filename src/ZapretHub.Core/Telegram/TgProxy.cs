@@ -23,183 +23,38 @@ public sealed partial class TgProxyReleaseClient : GitHubReleaseSource
 }
 
 /// <summary>Keeps downloaded proxy builds in versions/&lt;ver&gt;/TgWsProxy.exe and remembers the active one.</summary>
-public sealed class TgProxyStore
+public sealed class TgProxyStore : VersionedFileStore
 {
     public const string ExeName = "TgWsProxy.exe";
-    private const string PointerFile = "active.txt";
 
-    private readonly string _root;
-    private readonly string _versionsDir;
-
-    public TgProxyStore(string root)
+    public TgProxyStore(string root) : base(root, ExeName)
     {
-        _root = root;
-        _versionsDir = Path.Combine(root, "versions");
     }
 
-    public string? ActiveVersion
-    {
-        get
-        {
-            var pointer = Path.Combine(_root, PointerFile);
-            try
-            {
-                if (!File.Exists(pointer)) return null;
-                var version = ReleaseVersion.Normalize(File.ReadAllText(pointer));
-                return File.Exists(ExePath(version)) ? version : null;
-            }
-            catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
-            {
-                return null;
-            }
-        }
-    }
+    public string? ActiveExe => ActiveMain;
 
-    public string? ActiveExe => ActiveVersion is { } v ? ExePath(v) : null;
+    public string ExePath(string version) => MainPath(version);
 
-    public string ExePath(string version) => Path.Combine(_versionsDir, ReleaseVersion.Normalize(version), ExeName);
-
-    /// <summary>Stores a verified executable and makes it active. The previous version stays on disk until cleanup.</summary>
     public string Install(Stream exe, string version)
     {
-        version = ReleaseVersion.Normalize(version);
-        Directory.CreateDirectory(_versionsDir);
-        var staging = Path.Combine(_versionsDir, ".staging-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(staging);
-        try
-        {
-            var stagedExe = Path.Combine(staging, ExeName);
-            using (var file = File.Create(stagedExe)) exe.CopyTo(file);
-            if (!LooksLikeWindowsExecutable(stagedExe))
-            {
-                throw new InvalidDataException("Downloaded file is not a Windows executable.");
-            }
-
-            var target = Path.Combine(_versionsDir, version);
-            if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
-            Directory.Move(staging, target);
-            Activate(version);
-            return ExePath(version);
-        }
-        finally
-        {
-            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
-        }
-    }
-
-    public void Activate(string version)
-    {
-        version = ReleaseVersion.Normalize(version);
-        if (!File.Exists(ExePath(version))) throw new FileNotFoundException($"TG WS Proxy {version} is not installed.");
-        var tmp = Path.Combine(_root, PointerFile + ".tmp");
-        File.WriteAllText(tmp, version);
-        File.Move(tmp, Path.Combine(_root, PointerFile), overwrite: true);
-    }
-
-    /// <summary>Removes non-active versions; ones locked by a running proxy are left for next time.</summary>
-    public void CleanupInactive()
-    {
-        var active = ActiveVersion;
-        if (active is null || !Directory.Exists(_versionsDir)) return;
-        foreach (var dir in Directory.GetDirectories(_versionsDir))
-        {
-            if (string.Equals(Path.GetFileName(dir), active, StringComparison.OrdinalIgnoreCase)) continue;
-            try
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
-    }
-
-    private static bool LooksLikeWindowsExecutable(string path)
-    {
-        using var f = File.OpenRead(path);
-        if (f.Length < 64) return false;
-        Span<byte> header = stackalloc byte[2];
-        return f.Read(header) == 2 && header[0] == (byte)'M' && header[1] == (byte)'Z';
+        using var buffer = new MemoryStream();
+        exe.CopyTo(buffer);
+        return Install(new Dictionary<string, byte[]> { [ExeName] = buffer.ToArray() }, version);
     }
 }
 
-/// <summary>Same check → confirm → install → switch → cleanup flow as the engine, for the Telegram proxy.</summary>
-public sealed class TgProxyUpdater
+/// <summary>Confirmed updates for the Telegram proxy (a single .exe release asset).</summary>
+public sealed class TgProxyUpdater : FileReleaseUpdater
 {
-    private readonly TgProxyReleaseClient _releases;
-    private readonly TgProxyStore _store;
-
-    public TgProxyUpdater(TgProxyReleaseClient releases, TgProxyStore store)
+    public TgProxyUpdater(TgProxyReleaseClient releases, TgProxyStore store) : base(releases, store, "TG WS Proxy")
     {
-        _releases = releases;
-        _store = store;
     }
 
-    public async Task<ReleaseInfo?> CheckAsync(string? skipVersion, CancellationToken ct)
+    protected override IReadOnlyDictionary<string, byte[]> Unpack(Stream download)
     {
-        var latest = await _releases.GetLatestAsync(ct).ConfigureAwait(false);
-        if (!ReleaseVersion.IsNewer(latest.Version, _store.ActiveVersion)) return null;
-        if (skipVersion is not null && latest.Version == ReleaseVersion.Normalize(skipVersion)) return null;
-        return latest;
-    }
-
-    /// <param name="switchTo">Restarts the proxy on the new exe; if it throws, the previous version is re-activated,
-    /// passed to <paramref name="rollback"/>, and the failure is reported as a defective release.</param>
-    /// <returns>The installed version, or null when <paramref name="release"/> is not newer than the active one.</returns>
-    public async Task<string?> InstallAsync(ReleaseInfo release, Func<string, Task>? switchTo, Func<string, Task>? rollback, CancellationToken ct)
-    {
-        if (!ReleaseVersion.IsNewer(release.Version, _store.ActiveVersion)) return null;
-
-        var previous = _store.ActiveVersion;
-        string exe;
-        try
-        {
-            await using var download = await _releases.DownloadAsync(release, ct).ConfigureAwait(false);
-            exe = _store.Install(download, release.Version);
-        }
-        catch (InvalidDataException ex)
-        {
-            throw new UpdateException($"TG WS Proxy {release.Version} is not usable: {ex.Message}", ex, release.Version, releaseDefect: true);
-        }
-        catch (UpdateException ex) when (ex.Version is null)
-        {
-            throw new UpdateException(ex.Message, ex.InnerException, release.Version, ex.ReleaseDefect);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Local disk trouble, not a bad release: report it through the normal update error path.
-            throw new UpdateException($"TG WS Proxy {release.Version} could not be stored: {ex.Message}", ex, release.Version);
-        }
-
-        if (switchTo is not null)
-        {
-            try
-            {
-                await switchTo(exe).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (previous is not null)
-            {
-                _store.Activate(previous);
-                var note = "";
-                if (rollback is not null)
-                {
-                    try
-                    {
-                        await rollback(_store.ExePath(previous)).ConfigureAwait(false);
-                    }
-                    catch (Exception rollbackEx)
-                    {
-                        // Still a defective release; the caller learns the old version did not come back either.
-                        note = $" Restarting {previous} also failed: {rollbackEx.Message}";
-                    }
-                }
-                throw new UpdateException($"TG WS Proxy {release.Version} failed to start; rolled back to {previous}: {ex.Message}{note}",
-                    ex, release.Version, releaseDefect: true);
-            }
-        }
-
-        _store.CleanupInactive();
-        return release.Version;
+        using var buffer = new MemoryStream();
+        download.CopyTo(buffer);
+        return new Dictionary<string, byte[]> { [TgProxyStore.ExeName] = buffer.ToArray() };
     }
 }
 
