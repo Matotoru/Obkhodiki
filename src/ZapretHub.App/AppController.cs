@@ -132,7 +132,8 @@ internal sealed partial class AppController : IDisposable
         {
             _confirmingUpdate = false;
         }
-        if (!ReferenceEquals(_availableUpdate, release)) return; // installed or replaced meanwhile
+        // Installed meanwhile (e.g. via the other entry point): nothing left to do.
+        if (!ReleaseVersion.IsNewer(release.Version, _engine?.Version)) return;
         if (!confirmed)
         {
             // Declined: stop announcing this version in the background; a manual check still offers it.
@@ -209,6 +210,7 @@ internal sealed partial class AppController : IDisposable
     {
         if (!await ResolveConflictsAsync()) return;
         await StartCoreAsync();
+        _bypassWantedAfterLearning = true;
         Settings.EnableOnStart = true;
         _settingsStore.Save(Settings);
     });
@@ -216,6 +218,7 @@ internal sealed partial class AppController : IDisposable
     public Task DisableAsync() => Serialized("Остановка…", silentErrors: false, async () =>
     {
         await Task.Run(_runner.Stop);
+        _bypassWantedAfterLearning = false;
         Settings.EnableOnStart = false;
         _settingsStore.Save(Settings);
     });
@@ -307,6 +310,7 @@ internal sealed partial class AppController : IDisposable
             throw;
         }
         Settings.EnableOnStart = true;
+        _bypassWantedAfterLearning = true;
         _settingsStore.Save(Settings);
         Notify?.Invoke("Стратегия выбрана", $"{best.Strategy.Name}: открыто {best.Passed} из {best.Total}.", ToolTipIcon.Info);
     });

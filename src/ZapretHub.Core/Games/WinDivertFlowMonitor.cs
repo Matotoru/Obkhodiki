@@ -92,7 +92,13 @@ public sealed unsafe class WinDivertFlowMonitor : IDisposable
             while (Volatile.Read(ref _disposed) == 0)
             {
                 // FLOW and SOCKET layers carry no packet data, only the address/event record.
-                if (_recv(handle, null, 0, null, &addr) == 0) return; // shut down or failed
+                if (_recv(handle, null, 0, null, &addr) == 0)
+                {
+                    var error = Marshal.GetLastSystemError();
+                    // After Dispose the receive fails by design; anything else is a real failure worth reporting.
+                    if (Volatile.Read(ref _disposed) == 0) _onError?.Invoke(new Win32Exception(error, "WinDivertRecv failed"));
+                    return;
+                }
                 if (TryMap(addr, wantedEvent, _isWatchedProcess) is { } flow) _onFlow(flow);
             }
         }

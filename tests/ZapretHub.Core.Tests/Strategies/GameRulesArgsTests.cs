@@ -120,6 +120,17 @@ public class GameRulesArgsTests
     }
 
     [Fact]
+    public void Rule_LegacyGameFilterWithUdpOnlyRule_UsesUdpPortsNotEmpty()
+    {
+        var legacy = new StrategyDefinition("l", new[] { "--wf-udp=443", "--filter-udp=%GameFilter%", "--ipset=%LISTS%ipset-all.txt", "--dpi-desync=fake" });
+
+        var args = StrategyArgsBuilder.Build(legacy, Paths, GameFilterOptions.Disabled, new[] { Rule(tcp: "") });
+
+        Assert.Contains("--filter-udp=7777-7800", args);
+        Assert.DoesNotContain(args, a => a.EndsWith('='));
+    }
+
+    [Fact]
     public void Rule_LegacyGameFilterPlaceholder_UsesRulePortsNotInertPort()
     {
         var legacy = new StrategyDefinition("l", new[] { "--wf-tcp=443", "--filter-tcp=%GameFilter%", "--ipset=%LISTS%ipset-all.txt", "--dpi-desync=fake" });

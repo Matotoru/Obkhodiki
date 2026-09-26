@@ -38,8 +38,12 @@ public static class GameRuleCompiler
                     continue;
                 }
 
+                // winws may hot-reload the current copy: replace it atomically, never leave it briefly empty
+                // (an empty list means "every address").
                 var runtime = Path.Combine(runtimeDir, fileName);
-                File.WriteAllLines(runtime, lines);
+                var temp = runtime + ".tmp";
+                File.WriteAllLines(temp, lines);
+                File.Move(temp, runtime, overwrite: true);
                 rules.Add(new GameRule(runtime, tcp, udp));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or ArgumentException)

@@ -16,7 +16,8 @@ public class IpsetBuilderTests
         { "ip_prefix": "54.0.0.0/11", "region": "eu-central-1", "service": "EC2" },
         { "ip_prefix": "99.84.0.0/16", "region": "GLOBAL", "service": "CLOUDFRONT" },
         { "ip_prefix": "52.95.0.0/16", "region": "eu-central-1", "service": "S3" },
-        { "ip_prefix": "15.230.0.0/16", "region": "eu-central-1", "service": "GAMELIFT" }
+        { "ip_prefix": "15.230.0.0/16", "region": "eu-central-1", "service": "GAMELIFT" },
+        { "ip_prefix": "15.197.0.0/16", "region": "GLOBAL", "service": "GLOBALACCELERATOR" }
       ],
       "ipv6_prefixes": [
         { "ipv6_prefix": "2a05:d014::/36", "region": "eu-central-1", "service": "EC2" },
@@ -34,8 +35,9 @@ public class IpsetBuilderTests
     [Fact]
     public void AwsRanges_Parse_KeepsOnlyGameServerServicesDeduplicated()
     {
-        // EC2: 3.120/14, 18.192/15, 13.32/12, 54.0/11 + 3 IPv6; GAMELIFT: 15.230/16. AMAZON, CLOUDFRONT, S3 dropped.
-        Assert.Equal(8, Aws.Count);
+        // EC2: 3.120/14, 18.192/15, 13.32/12, 54.0/11 + 3 IPv6; GAMELIFT 15.230/16; GLOBALACCELERATOR 15.197/16.
+        // AMAZON, CLOUDFRONT, S3 dropped.
+        Assert.Equal(9, Aws.Count);
     }
 
     [Theory]
@@ -49,9 +51,16 @@ public class IpsetBuilderTests
     [Fact]
     public void Build_AwsGameServer_ExpandedToSmallestRegionalPrefix()
     {
-        var lines = IpsetBuilder.Build(new[] { Udp("3.121.5.6"), Udp("18.193.0.1"), Udp("15.230.1.1") }, Aws);
+        var lines = IpsetBuilder.Build(new[] { Udp("3.121.5.6"), Udp("18.193.0.1"), Udp("15.230.1.1"), Udp("15.197.2.2") }, Aws);
 
-        Assert.Equal(new[] { "15.230.0.0/16", "18.192.0.0/15", "3.120.0.0/14" }, lines);
+        Assert.Equal(new[] { "15.197.0.0/16", "15.230.0.0/16", "18.192.0.0/15", "3.120.0.0/14" }, lines);
+    }
+
+    // Game backends on EC2 (matchmaking over HTTPS too) change IPs between sessions: widen regardless of protocol.
+    [Fact]
+    public void Build_TcpOnlyAddressInGameHostingRange_StillWidensToRegionalPrefix()
+    {
+        Assert.Equal(new[] { "3.120.0.0/14" }, IpsetBuilder.Build(new[] { Tcp("3.121.5.6") }, Aws));
     }
 
     // Limits: /12 is still a region, /11 is too broad and falls back.

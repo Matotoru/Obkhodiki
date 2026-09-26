@@ -160,7 +160,13 @@ internal sealed class LearnGameForm : Form
         SetBusy(true);
         var started = await _controller.StartLearningAsync(exe, _bypassAll.Checked, _learned);
         SetBusy(false);
-        if (!started || IsDisposed) return; // the controller already reported the error
+        if (!started) return; // the controller already reported the error
+        if (IsDisposed)
+        {
+            // The app is shutting the dialog down: never leave a recording (and its "any" rule) running.
+            await _controller.StopLearningAsync();
+            return;
+        }
 
         _recording = true;
         _record.Text = "■ Остановить запись";
@@ -211,6 +217,18 @@ internal sealed class LearnGameForm : Form
 
         SetBusy(true);
         _save.Enabled = false;
+        try
+        {
+            await SaveCoreAsync(name);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task SaveCoreAsync(string name)
+    {
         AwsIpRanges? aws = null;
         if (_expandAws.Checked)
         {
@@ -240,7 +258,6 @@ internal sealed class LearnGameForm : Form
             UdpPorts = PortSet.Parse(_existing?.UdpPorts ?? "").Union(_learned.UdpPorts).ToString(),
         };
         var saved = await _controller.SaveGameProfileAsync(profile, lines);
-        SetBusy(false);
         if (!saved)
         {
             // Keep the dialog (and what was recorded) so the user can retry.

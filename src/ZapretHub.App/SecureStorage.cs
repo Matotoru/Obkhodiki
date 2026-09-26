@@ -21,11 +21,112 @@ internal static class SecureStorage
         // Created together with its security descriptor: creating first and locking later would leave a
         // window where the inherited %ProgramData% ACL lets any user create (and own) subfolders.
         CreateOrLock(AppPaths.Root, RootAcl());
-        CreateOrLock(AppPaths.UserData, UserAcl());
-        CreateOrLock(AppPaths.UserLists, UserAcl());
+        var rebuilt = RebuildUserFoldersIfLoose();
         Directory.CreateDirectory(AppPaths.GamesDir); // inherits the admin-only root ACL
 
         if (quarantined is not null) Log.Error(quarantined);
+        if (rebuilt is not null) Log.Info(rebuilt);
+    }
+
+    // Rights that would let a non-admin redirect or empty a user folder (mount point needs FILE_WRITE_DATA
+    // on the folder; emptying it needs DELETE on files) or re-grant itself anything.
+    private const FileSystemRights DangerousOnFolder =
+        FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.Delete |
+        FileSystemRights.DeleteSubdirectoriesAndFiles | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
+
+    private static readonly string[] UserDataFiles = { "targets.txt" };
+    private const long MaxCopiedFileBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// The user folders are never re-permissioned in place: setting an ACL by path on a folder the user may
+    /// still control follows a junction swapped in at the last moment. If anything about them is loose
+    /// (older app version, foreign owner, reparse point), they are moved aside, recreated atomically with the
+    /// right ACL, and only plain known text files are copied back.
+    /// </summary>
+    private static string? RebuildUserFoldersIfLoose()
+    {
+        if (IsLockedDown(AppPaths.UserData, allowedSubdirs: new[] { "lists" }) && IsLockedDown(AppPaths.UserLists, allowedSubdirs: Array.Empty<string>()))
+        {
+            return null;
+        }
+
+        string? aside = null;
+        var existing = new DirectoryInfo(AppPaths.UserData);
+        if (existing.Exists || File.Exists(AppPaths.UserData))
+        {
+            aside = QuarantineName(AppPaths.UserData);
+            if (existing.Exists && existing.Attributes.HasFlag(FileAttributes.ReparsePoint)) existing.Delete(); // removes the link only
+            else if (existing.Exists) existing.MoveTo(aside); // renaming a junction moves the link, never its target
+            else File.Move(AppPaths.UserData, aside);
+        }
+
+        new DirectoryInfo(AppPaths.UserData).Create(UserAcl());
+        new DirectoryInfo(AppPaths.UserLists).Create(UserAcl());
+
+        if (aside is not null && Directory.Exists(aside))
+        {
+            CopyPlainTextFiles(aside, AppPaths.UserData, name => UserDataFiles.Contains(name, StringComparer.OrdinalIgnoreCase));
+            var oldLists = Path.Combine(aside, "lists");
+            if (Directory.Exists(oldLists) && !new DirectoryInfo(oldLists).Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                CopyPlainTextFiles(oldLists, AppPaths.UserLists, name => name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        return $"User folder {AppPaths.UserData} re-created with locked-down permissions" + (aside is null ? "" : $"; previous copy kept at {aside}");
+    }
+
+    private static bool IsLockedDown(string path, string[] allowedSubdirs)
+    {
+        try
+        {
+            var dir = new DirectoryInfo(path);
+            if (!dir.Exists || dir.Attributes.HasFlag(FileAttributes.ReparsePoint)) return false;
+
+            var sec = dir.GetAccessControl();
+            if (!IsTrustedOwner(sec.GetOwner(typeof(SecurityIdentifier))) || !sec.AreAccessRulesProtected) return false;
+            foreach (FileSystemAccessRule rule in sec.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+            {
+                if (rule.AccessControlType != AccessControlType.Allow) continue;
+                if (rule.IdentityReference == Admins || rule.IdentityReference == System) continue;
+                // Rules that apply to the folder itself must not carry anything dangerous.
+                var appliesToFolder = !rule.PropagationFlags.HasFlag(PropagationFlags.InheritOnly);
+                if (appliesToFolder && (rule.FileSystemRights & DangerousOnFolder) != 0) return false;
+                if (rule.InheritanceFlags.HasFlag(InheritanceFlags.ContainerInherit)) return false;
+                if ((rule.FileSystemRights & FileSystemRights.Delete) != 0) return false;
+            }
+
+            foreach (var entry in dir.EnumerateFileSystemInfos())
+            {
+                if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint)) return false;
+                if (entry is DirectoryInfo && !allowedSubdirs.Contains(entry.Name, StringComparer.OrdinalIgnoreCase)) return false;
+                var owner = entry is FileInfo f
+                    ? f.GetAccessControl().GetOwner(typeof(SecurityIdentifier))
+                    : ((DirectoryInfo)entry).GetAccessControl().GetOwner(typeof(SecurityIdentifier));
+                if (!IsTrustedOwner(owner)) return false;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or PrivilegeNotHeldException or IOException)
+        {
+            return false;
+        }
+    }
+
+    // Copies only small regular files by content into new admin-owned files (so they inherit the new ACL).
+    private static void CopyPlainTextFiles(string from, string to, Func<string, bool> wanted)
+    {
+        foreach (var file in new DirectoryInfo(from).EnumerateFiles())
+        {
+            if (!wanted(file.Name) || file.Attributes.HasFlag(FileAttributes.ReparsePoint) || file.Length > MaxCopiedFileBytes) continue;
+            try
+            {
+                File.WriteAllBytes(Path.Combine(to, file.Name), File.ReadAllBytes(file.FullName));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Skip unreadable leftovers; defaults are recreated by the app.
+            }
+        }
     }
 
     // %ProgramData% lets any user create folders. A pre-created ZapretHub folder, a junction, a file in its

@@ -87,6 +87,32 @@ public unsafe class WinDivertFlowMonitorTests
     }
 
     [Fact]
+    public void TryMap_Ipv6Flow_DecodesV6Remote()
+    {
+        var addr = Event(extraBits: Ipv6Bit);
+        addr.Data.RemoteAddr[0] = 0x00000001;
+        addr.Data.RemoteAddr[1] = 0x00000000;
+        addr.Data.RemoteAddr[2] = 0x00010002;
+        addr.Data.RemoteAddr[3] = 0x2A05D014;
+
+        var flow = WinDivertFlowMonitor.TryMap(addr, WinDivertFlowMonitor.EventFlowEstablished, Only42);
+
+        Assert.Equal("2a05:d014:1:2::1", flow?.Remote.ToString());
+    }
+
+    // Values from windivert.h (WinDivert 2.x): a wrong layer/event number silently stops a reader from reporting.
+    [Fact]
+    public void Constants_MatchWinDivertHeader()
+    {
+        Assert.Equal(2, WinDivertFlowMonitor.LayerFlow);
+        Assert.Equal(3, WinDivertFlowMonitor.LayerSocket);
+        Assert.Equal(1, WinDivertFlowMonitor.EventFlowEstablished);
+        Assert.Equal(4, WinDivertFlowMonitor.EventSocketConnect);
+        Assert.Equal(6, WinDivertFlowMonitor.ProtoTcp);
+        Assert.Equal(17, WinDivertFlowMonitor.ProtoUdp);
+    }
+
+    [Fact]
     public void TryMap_Tcp_MappedAsTcp()
     {
         var flow = WinDivertFlowMonitor.TryMap(Event(proto: WinDivertFlowMonitor.ProtoTcp, port: 443), WinDivertFlowMonitor.EventFlowEstablished, Only42);

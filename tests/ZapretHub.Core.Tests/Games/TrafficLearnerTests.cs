@@ -52,6 +52,7 @@ public class TrafficLearnerTests
     [InlineData("::1")]
     [InlineData("fe80::1")]
     [InlineData("fd00::1")]
+    [InlineData("fec0::1")]
     [InlineData("ff02::fb")]
     public void Add_NonPublicAddress_Ignored(string ip)
     {
@@ -69,6 +70,7 @@ public class TrafficLearnerTests
     [InlineData("100.63.255.255")]
     [InlineData("100.128.0.0")]
     [InlineData("11.0.0.1")]
+    [InlineData("223.255.255.254")]
     [InlineData("2a05:d014::1")]
     [InlineData("2001:4860::8888")]
     public void Add_PublicAddressNextToPrivateRanges_Kept(string ip)

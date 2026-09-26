@@ -12,7 +12,9 @@ internal sealed partial class AppController
 
     private volatile GameRule? _learningRule;
     private volatile LearningSession? _learningSession;
-    private bool _runningBeforeLearning;
+    // Whether bypass should run once learning stops. Starts as "was it running", then follows any
+    // Enable/Disable/auto-select the user does while recording.
+    private volatile bool _bypassWantedAfterLearning;
 
     public bool IsLearning => _learningSession is not null;
 
@@ -56,7 +58,21 @@ internal sealed partial class AppController
             saved = true;
             Log.Info($"Game profile {profile.Id} saved: {merged.Count} networks, TCP {profile.TcpPorts}, UDP {profile.UdpPorts}");
 
-            if (_runner.IsRunning) await StartCoreAsync();
+            if (!_runner.IsRunning || !profile.Enabled) return;
+            try
+            {
+                await StartCoreAsync();
+            }
+            catch (Exception ex)
+            {
+                // Keep what was learned, but do not leave bypass off because of the new profile.
+                Log.Error($"winws rejected game profile {profile.Id}", ex);
+                profile.Enabled = false;
+                _settingsStore.Save(Settings);
+                await StartCoreAsync();
+                Notify?.Invoke("Профиль сохранён, но выключен",
+                    $"С правилами «{profile.Name}» winws не запустился: {ex.Message}", ToolTipIcon.Warning);
+            }
         });
         return saved;
     }
@@ -104,11 +120,19 @@ internal sealed partial class AppController
             {
                 _learningRule = null;
                 await Task.Run(session.Dispose);
-                await RestoreAfterLearningAsync(wasRunning);
+                try
+                {
+                    await RestoreAfterLearningAsync(wasRunning);
+                }
+                catch (Exception restoreEx)
+                {
+                    // Report the original failure, not the follow-up one.
+                    Log.Error("Restoring bypass after failed learning start failed", restoreEx);
+                }
                 throw;
             }
 
-            _runningBeforeLearning = wasRunning;
+            _bypassWantedAfterLearning = wasRunning;
             _learningSession = session;
             started = true;
             Log.Info($"Learning started for {processName}, bypass all: {bypassAll}");
@@ -125,7 +149,7 @@ internal sealed partial class AppController
         _learningRule = null;
         // Joining WinDivert reader threads can take a moment; keep it off the UI thread.
         await Task.Run(session.Dispose);
-        await RestoreAfterLearningAsync(_runningBeforeLearning);
+        await RestoreAfterLearningAsync(_bypassWantedAfterLearning);
         Log.Info($"Learning stopped: {session.Learner.Addresses.Count} addresses");
     });
 
@@ -154,7 +178,9 @@ internal sealed partial class AppController
 internal sealed class LearningSession : IDisposable
 {
     private readonly string _processName;
-    private readonly Dictionary<int, bool> _pidCache = new();
+    // PIDs are reused by Windows, so a verdict is only trusted for a short while.
+    private static readonly TimeSpan PidCacheTtl = TimeSpan.FromSeconds(30);
+    private readonly Dictionary<int, (bool Match, DateTime At)> _pidCache = new();
     private readonly WinDivertFlowMonitor _monitor;
 
     public LearningSession(string winDivertDll, string processName, TrafficLearner learner, Action<Exception> onError)
@@ -166,13 +192,14 @@ internal sealed class LearningSession : IDisposable
 
     public TrafficLearner Learner { get; }
 
-    // Called from WinDivert reader threads. Any failure means "not ours": a process that exits between
+    // Called from WinDivert reader threads (the lock is uncontended in practice: two readers, few new PIDs). Any failure means "not ours": a process that exits between
     // lookup and name read throws InvalidOperationException, protected ones throw Win32Exception.
     private bool IsWatched(int pid)
     {
         lock (_pidCache)
         {
-            if (_pidCache.TryGetValue(pid, out var known)) return known;
+            var now = DateTime.UtcNow;
+            if (_pidCache.TryGetValue(pid, out var known) && now - known.At < PidCacheTtl) return known.Match;
             bool match;
             try
             {
@@ -183,7 +210,7 @@ internal sealed class LearningSession : IDisposable
             {
                 match = false;
             }
-            _pidCache[pid] = match;
+            _pidCache[pid] = (match, now);
             return match;
         }
     }

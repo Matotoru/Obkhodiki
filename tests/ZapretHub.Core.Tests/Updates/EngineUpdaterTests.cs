@@ -118,6 +118,20 @@ public sealed class EngineUpdaterTests : IDisposable
     }
 
     [Fact]
+    public async Task Install_OlderThanActive_NoDowngrade()
+    {
+        var (updater, store) = Create(Handler("1.10.2", () => throw new Xunit.Sdk.XunitException("must not download")));
+        store.Install(EngineStoreTests.Zip(EngineStoreTests.ValidRelease()), "1.10.4");
+
+        var result = await updater.InstallAsync(
+            new ReleaseInfo("1.10.2", new Uri("https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.10.2/zapret-discord-youtube-1.10.2.zip"), new string('0', 64)),
+            null, null, CancellationToken.None);
+
+        Assert.Equal(UpdateOutcome.UpToDate, result.Outcome);
+        Assert.Equal("1.10.4", store.ActiveVersion);
+    }
+
+    [Fact]
     public async Task Install_ChecksumMismatch_IsReleaseDefect()
     {
         var (updater, store) = Create(Handler("1.10.4", () => ZipOk(), digestOf: new byte[] { 0 }));
@@ -222,10 +236,14 @@ public sealed class EngineUpdaterTests : IDisposable
         store.Install(EngineStoreTests.Zip(EngineStoreTests.ValidRelease()), "1.10.2");
         string? rolledBackTo = null;
 
-        await Assert.ThrowsAsync<UpdateException>(() => updater.UpdateAsync(
+        var ex = await Assert.ThrowsAsync<UpdateException>(() => updater.UpdateAsync(
             _ => throw new InvalidOperationException("winws exited with code 1"),
             CancellationToken.None,
             previous => { rolledBackTo = previous.Version; return Task.CompletedTask; }));
+
+        // A release whose winws will not start is defective: it must not be re-offered on every launch.
+        Assert.True(ex.ReleaseDefect);
+        Assert.Equal("1.10.3", ex.Version);
 
         Assert.Equal("1.10.2", store.ActiveVersion);
         Assert.Equal("1.10.2", rolledBackTo);

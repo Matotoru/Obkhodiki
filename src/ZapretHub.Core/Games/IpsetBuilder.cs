@@ -70,9 +70,10 @@ public static partial class IpsetBuilder
     private const int FallbackPrefixV6 = 64;
 
     /// <summary>
-    /// Amazon game-server addresses widen to their regional prefix. Other UDP addresses (game servers on other
-    /// hosters) widen to /24 (/64); TCP-only addresses (APIs, CDNs) stay exact, so a CDN node never drags its
-    /// neighbours into game rules.
+    /// Addresses inside Amazon's game-hosting services (EC2/GameLift/Global Accelerator) widen to their regional
+    /// prefix whatever the protocol: game backends there (matchmaking over HTTPS included) move between IPs from
+    /// session to session. Other UDP addresses (game servers on other hosters) widen to /24 (/64); other TCP-only
+    /// addresses (APIs, CDNs) stay exact, so a CDN node never drags its neighbours into game rules.
     /// </summary>
     public static IReadOnlyList<string> Build(IEnumerable<LearnedAddress> addresses, AwsIpRanges? aws) =>
         Collapse(addresses.Select(a => ToNetwork(a, aws)));
