@@ -18,7 +18,8 @@ internal sealed class TrayContext : ApplicationContext
     private readonly SynchronizationContext _ui;
     private AutoSelectForm? _autoSelectForm;
     private LearnGameForm? _learnForm;
-    private bool _updateBalloonShown;
+    private string? _updateBalloonProduct;
+    private string? _pendingUpdateProduct;
     private bool _autostartEnabled;
 
     public TrayContext()
@@ -30,28 +31,41 @@ internal sealed class TrayContext : ApplicationContext
         {
             if (e.Button == MouseButtons.Left) ToggleAsync();
         };
-        _menu.Opening += (_, _) => RebuildMenu();
+        _menu.Opening += (_, _) =>
+        {
+            RebuildMenu();
+            // Refresh slow-to-query state in the background for the next opening / the tray icon.
+            _ = _controller.RefreshTgStateAsync();
+        };
 
         _controller.StateChanged += () => _ui.Post(_ => RefreshIcon(), null);
+        // Both handlers post to the UI thread in order, so the product is known before its balloon shows.
+        _controller.UpdateAnnounced += product => _ui.Post(_ => _pendingUpdateProduct = product, null);
         _controller.Notify += (title, text, icon) => _ui.Post(_ =>
         {
-            // Remember which balloon is on screen: only the "update available" one installs on click.
-            _updateBalloonShown = _controller.AvailableUpdate is not null && title.StartsWith("Доступно обновление", StringComparison.Ordinal);
+            // Remember which balloon is on screen: only an "update available" one installs on click.
+            _updateBalloonProduct = _pendingUpdateProduct;
+            _pendingUpdateProduct = null;
             _tray.ShowBalloonTip(5000, title, text, icon);
         }, null);
+        _controller.ConfirmStopForeignTg = () => Dialogs.Confirm(
+            "Уже запущен отдельно установленный TG WS Proxy. Он занимает тот же порт, что и прокси ZapretHub.\n\n" +
+            "Закрыть его и запустить прокси из ZapretHub?",
+            "ZapretHub — Telegram", MessageBoxIcon.Question);
         _tray.BalloonTipClicked += async (_, _) =>
         {
-            if (!_updateBalloonShown) return;
-            _updateBalloonShown = false;
-            await _controller.InstallAvailableUpdateAsync();
+            var product = _updateBalloonProduct;
+            _updateBalloonProduct = null;
+            if (product == "Flowseal") await _controller.InstallAvailableUpdateAsync();
+            else if (product == AppController.TgProductName) await _controller.InstallAvailableTgUpdateAsync();
         };
-        _tray.BalloonTipClosed += (_, _) => _updateBalloonShown = false;
-        _controller.ConfirmUpdate = (version, current) => Dialogs.Confirm(
-            $"Доступна новая версия стратегий Flowseal: {version}" +
+        _tray.BalloonTipClosed += (_, _) => _updateBalloonProduct = null;
+        _controller.ConfirmUpdate = (product, version, current) => Dialogs.Confirm(
+            $"Доступна новая версия {product}: {version}" +
             (current is null ? "" : $" (установлена {current})") +
             ".\n\nСкачать и установить? Файлы проверяются по контрольной сумме с GitHub." +
             "\nЕсли новая версия не запустится, вернётся прежняя.",
-            "ZapretHub — обновление", MessageBoxIcon.Question);
+            $"ZapretHub — обновление {product}", MessageBoxIcon.Question);
         _controller.ConfirmStopConflicts = description => Dialogs.Confirm(
             "Уже запущен другой обход блокировок (он использует тот же драйвер WinDivert):\n\n" + description +
             "\n\nОстановить его и продолжить?",
@@ -85,6 +99,7 @@ internal sealed class TrayContext : ApplicationContext
             ?? (_controller.IsRunning ? $"● Включён — {_controller.ActiveStrategyName}" : "○ Выключен")) { Enabled = false });
         _menu.Items.Add(new ToolStripSeparator());
 
+        var anyUpdate = false;
         if (_controller.AvailableUpdate is { } update)
         {
             _menu.Items.Add(new ToolStripMenuItem($"⬆ Установить Flowseal {update.Version}…", null,
@@ -93,8 +108,19 @@ internal sealed class TrayContext : ApplicationContext
                 Enabled = !busy,
                 Font = _boldFont,
             });
-            _menu.Items.Add(new ToolStripSeparator());
+            anyUpdate = true;
         }
+        if (_controller.AvailableTgUpdate is { } tgUpdate)
+        {
+            _menu.Items.Add(new ToolStripMenuItem($"⬆ Установить TG WS Proxy {tgUpdate.Version}…", null,
+                async (_, _) => await _controller.InstallAvailableTgUpdateAsync())
+            {
+                Enabled = !busy,
+                Font = _boldFont,
+            });
+            anyUpdate = true;
+        }
+        if (anyUpdate) _menu.Items.Add(new ToolStripSeparator());
 
         _menu.Items.Add(new ToolStripMenuItem(_controller.IsRunning ? "Выключить" : "Включить", null, (_, _) => ToggleAsync())
         {
@@ -119,6 +145,7 @@ internal sealed class TrayContext : ApplicationContext
         });
 
         _menu.Items.Add(BuildGamesMenu(ready));
+        _menu.Items.Add(BuildTelegramMenu(busy));
 
         var game = new ToolStripMenuItem("Игровой фильтр") { Enabled = ready };
         foreach (var (mode, title) in new[]
@@ -210,6 +237,34 @@ internal sealed class TrayContext : ApplicationContext
                 async (_, _) => await _controller.StopLearningAsync()) { Font = _boldFont });
         }
         return games;
+    }
+
+    private ToolStripMenuItem BuildTelegramMenu(bool busy)
+    {
+        var running = _controller.IsTgRunning;
+        var telegram = new ToolStripMenuItem("Telegram") { Checked = running };
+        telegram.DropDownItems.Add(new ToolStripMenuItem(running ? "Выключить TG WS Proxy" : "Включить TG WS Proxy", null,
+            async (_, _) =>
+            {
+                if (running) await _controller.DisableTelegramAsync();
+                else await _controller.EnableTelegramAsync();
+            })
+        {
+            Enabled = !busy,
+            Font = _boldFont,
+        });
+        telegram.DropDownItems.Add(new ToolStripMenuItem("Подключить Telegram к прокси", null, async (_, _) => await _controller.ConnectTelegramAsync())
+        {
+            Enabled = running,
+        });
+        telegram.DropDownItems.Add(new ToolStripSeparator());
+        telegram.DropDownItems.Add(new ToolStripMenuItem(
+            $"Проверить обновления TG WS Proxy (сейчас {_controller.TgVersion ?? "не установлен"})", null,
+            async (_, _) => await _controller.CheckTgUpdateManuallyAsync())
+        {
+            Enabled = !busy && _controller.TgVersion is not null,
+        });
+        return telegram;
     }
 
     private void OpenLearn(GameProfile? profile)

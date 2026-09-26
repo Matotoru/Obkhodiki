@@ -24,6 +24,9 @@ internal static class AppPaths
     /// <summary>Normalized copies winws actually reads (see GameRuleCompiler).</summary>
     public static readonly string GamesRuntimeDir = Path.Combine(Root, "games", "runtime");
 
+    /// <summary>Downloaded tg-ws-proxy builds (admin-only folder; the proxy itself runs as the normal user).</summary>
+    public static readonly string TgRoot = Path.Combine(Root, "telegram");
+
     public static readonly string UserData = Path.Combine(Root, "user");
     public static readonly string UserLists = Path.Combine(UserData, "lists");
     public static readonly string Targets = Path.Combine(UserData, "targets.txt");

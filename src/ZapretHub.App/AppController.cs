@@ -39,11 +39,14 @@ internal sealed partial class AppController : IDisposable
     public event Action? StateChanged;
     public event Action<string, string, ToolTipIcon>? Notify;
 
+    /// <summary>An update balloon for this product is about to be shown (lets the tray route a click on it).</summary>
+    public event Action<string>? UpdateAnnounced;
+
     /// <summary>Asked (on the UI thread) before stopping other DPI tools. Argument: human-readable list.</summary>
     public Func<string, bool> ConfirmStopConflicts { get; set; } = _ => false;
 
-    /// <summary>Asked (on the UI thread) before installing a Flowseal release. Arguments: new and current version.</summary>
-    public Func<string, string?, bool> ConfirmUpdate { get; set; } = (_, _) => false;
+    /// <summary>Asked (on the UI thread) before installing an update. Arguments: product, new and current version.</summary>
+    public Func<string, string, string?, bool> ConfirmUpdate { get; set; } = (_, _, _) => false;
 
     /// <summary>A newer Flowseal release the user has not installed yet (shown in the menu).</summary>
     public ReleaseInfo? AvailableUpdate => _availableUpdate;
@@ -75,9 +78,14 @@ internal sealed partial class AppController : IDisposable
             {
                 await EnableAsync();
             }
+            await StartTelegramIfWantedAsync();
             if (Settings.CheckUpdatesOnStart && _engine is not null)
             {
                 await CheckForUpdateAsync(userInitiated: false);
+            }
+            if (Settings.CheckUpdatesOnStart)
+            {
+                await CheckTgUpdateAsync(userInitiated: false);
             }
         }
         catch (Exception ex)
@@ -106,11 +114,7 @@ internal sealed partial class AppController : IDisposable
                 return;
             }
             Log.Info($"Flowseal {found.Version} is available (installed {_engine?.Version})");
-            if (!userInitiated)
-            {
-                Notify?.Invoke("Доступно обновление Flowseal",
-                    $"Версия {found.Version}. Нажмите на это уведомление или выберите пункт в меню, чтобы установить.", ToolTipIcon.Info);
-            }
+            if (!userInitiated) AnnounceUpdate("Flowseal", found.Version);
         });
 
         if (found is not null && userInitiated) await InstallAvailableUpdateAsync();
@@ -126,7 +130,7 @@ internal sealed partial class AppController : IDisposable
         bool confirmed;
         try
         {
-            confirmed = ConfirmUpdate(release.Version, _engine?.Version);
+            confirmed = ConfirmUpdate("Flowseal", release.Version, _engine?.Version);
         }
         finally
         {
@@ -502,6 +506,13 @@ internal sealed partial class AppController : IDisposable
         }
     }
 
+    private void AnnounceUpdate(string product, string version)
+    {
+        UpdateAnnounced?.Invoke(product);
+        Notify?.Invoke($"Доступно обновление {product}",
+            $"Версия {version}. Нажмите на это уведомление или выберите пункт в меню, чтобы установить.", ToolTipIcon.Info);
+    }
+
     private void SetBusy(string text)
     {
         _busyText = text;
@@ -512,6 +523,16 @@ internal sealed partial class AppController : IDisposable
 
     public void Dispose()
     {
+        try
+        {
+            // The proxy lives outside winws' kill-on-close job; the app that started it stops it — always,
+            // even if a start was still in flight.
+            TgProxyRunner.Stop();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Stopping TG WS Proxy on exit failed", ex);
+        }
         _learningSession?.Dispose();
         _runner.Dispose();
         _http.Dispose();

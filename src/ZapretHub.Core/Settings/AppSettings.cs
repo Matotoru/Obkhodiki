@@ -22,6 +22,12 @@ public sealed class AppSettings
     public string? SkippedUpdateVersion { get; set; }
 
     public List<GameProfile> GameProfiles { get; set; } = new();
+
+    /// <summary>Keep Flowseal's tg-ws-proxy running (Telegram bypass).</summary>
+    public bool TelegramEnabled { get; set; }
+
+    /// <summary>A tg-ws-proxy release the user declined or that failed; background checks skip it.</summary>
+    public string? TelegramSkippedVersion { get; set; }
 }
 
 public sealed class AppSettingsStore

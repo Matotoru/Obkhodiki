@@ -34,6 +34,7 @@ public class ReleaseVersionTests
     [InlineData("")]
     [InlineData("latest")]
     [InlineData("1.x.3")]
+    [InlineData("1.99999999999")]  // would overflow int when compared
     public void Normalize_Garbage_Throws(string version)
     {
         Assert.Throws<FormatException>(() => ReleaseVersion.Normalize(version));

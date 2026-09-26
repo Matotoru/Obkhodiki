@@ -6,10 +6,10 @@ namespace ZapretHub.Core.Tests.Updates;
 
 public class FlowsealReleaseClientTests
 {
-    private const string ZipUrl = "https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.10.3/zapret-discord-youtube-1.10.3.zip";
+    private const string AssetUrl = "https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.10.3/zapret-discord-youtube-1.10.3.zip";
     private const string Digest = "244314ae1c24538a0d751601da8e0c925c843371eec4456eb15f14c4fd6b7058";
 
-    private static string Release(string zipUrl = ZipUrl, string? digest = "sha256:" + Digest, string zipName = "zapret-discord-youtube-1.10.3.zip")
+    private static string Release(string zipUrl = AssetUrl, string? digest = "sha256:" + Digest, string zipName = "zapret-discord-youtube-1.10.3.zip")
     {
         var digestField = digest is null ? "" : $"\"digest\": \"{digest}\",";
         return $$"""
@@ -34,7 +34,7 @@ public class FlowsealReleaseClientTests
         var release = await client.GetLatestAsync(CancellationToken.None);
 
         Assert.Equal("1.10.3", release.Version);
-        Assert.Equal(new Uri(ZipUrl), release.ZipUrl);
+        Assert.Equal(new Uri(AssetUrl), release.AssetUrl);
         Assert.Equal(Digest, release.Sha256);
         Assert.Equal("api.github.com", handler.Requests.Single().RequestUri!.Host);
         Assert.Contains("Flowseal/zapret-discord-youtube", handler.Requests.Single().RequestUri!.AbsolutePath);
@@ -77,7 +77,7 @@ public class FlowsealReleaseClientTests
     public async Task Download_MatchingDigest_ReturnsBytes()
     {
         var bytes = new byte[] { 1, 2, 3 };
-        var release = new ReleaseInfo("1.0", new Uri(ZipUrl), Sha(bytes));
+        var release = new ReleaseInfo("1.0", new Uri(AssetUrl), Sha(bytes));
         var handler = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) });
 
         await using var stream = await new FlowsealReleaseClient(new HttpClient(handler)).DownloadAsync(release, CancellationToken.None);
@@ -88,7 +88,7 @@ public class FlowsealReleaseClientTests
     [Fact]
     public async Task Download_DigestMismatch_Rejected()
     {
-        var release = new ReleaseInfo("1.0", new Uri(ZipUrl), Sha(new byte[] { 9 }));
+        var release = new ReleaseInfo("1.0", new Uri(AssetUrl), Sha(new byte[] { 9 }));
         var handler = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[] { 1, 2, 3 }) });
 
         await Assert.ThrowsAsync<UpdateException>(() =>
@@ -98,7 +98,7 @@ public class FlowsealReleaseClientTests
     [Fact]
     public async Task Download_Oversized_RejectedWithoutReadingEverything()
     {
-        var release = new ReleaseInfo("1.0", new Uri(ZipUrl), Digest);
+        var release = new ReleaseInfo("1.0", new Uri(AssetUrl), Digest);
         var content = new ByteArrayContent(Array.Empty<byte>());
         content.Headers.ContentLength = FlowsealReleaseClient.MaxDownloadBytes + 1;
         var handler = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = content });

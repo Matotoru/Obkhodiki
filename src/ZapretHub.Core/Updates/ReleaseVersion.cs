@@ -24,7 +24,8 @@ public static class ReleaseVersion
     {
         var v = version.Trim().TrimStart('v', 'V').TrimEnd('.');
         var parts = v.Split('.');
-        if (v.Length == 0 || parts.Any(p => p.Length == 0 || !p.All(char.IsAsciiDigit)))
+        // Up to 9 digits per part: always fits an int, so comparing can never overflow.
+        if (v.Length == 0 || parts.Any(p => p.Length is 0 or > 9 || !p.All(char.IsAsciiDigit)))
         {
             throw new FormatException($"Unsupported version '{version}'.");
         }
