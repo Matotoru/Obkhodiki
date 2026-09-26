@@ -1,0 +1,14 @@
+bin/
+obj/
+*.user
+.vs/
+publish/
+logs/
+TestResults/
+
+# Secrets (VPS / proxy credentials must never be committed)
+.env
+*.key
+credentials.json
+secrets/
+*.hysteria.yaml

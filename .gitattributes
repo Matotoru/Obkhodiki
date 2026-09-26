@@ -1,0 +1,3 @@
+* text=auto
+# Flowseal strategy fixtures must keep their original CRLF bytes.
+tests/ZapretHub.Core.Tests/Fixtures/** -text
