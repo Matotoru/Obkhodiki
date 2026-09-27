@@ -5,7 +5,6 @@
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   xmlns:vm="clr-namespace:ZapretHub.App.Ui.ViewModels"
   Title="Настройки">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}">
       <ui:CardControl Margin="{StaticResource CardSpacing}">
         <ui:CardControl.Icon>
@@ -96,5 +95,4 @@
         <Run Text="· на основе zapret (bol-van), стратегий и TG WS Proxy от Flowseal, sing-box (SagerNet)" />
       </TextBlock>
     </StackPanel>
-  </ScrollViewer>
 </Page>

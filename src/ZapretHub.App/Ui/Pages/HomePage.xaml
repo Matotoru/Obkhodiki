@@ -4,7 +4,6 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="Главная">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}" DataContext="{Binding Home}">
 
       <!-- Hero: the one switch that matters most. -->
@@ -110,5 +109,4 @@
         </Grid>
       </ui:Card>
     </StackPanel>
-  </ScrollViewer>
 </Page>

@@ -37,7 +37,6 @@
     </DataTemplate>
   </Page.Resources>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}">
 
       <!-- Server. -->
@@ -161,5 +160,4 @@
         <Run Text="{Binding SingBoxVersion, Mode=OneWay}" />
       </TextBlock>
     </StackPanel>
-  </ScrollViewer>
 </Page>

@@ -4,7 +4,6 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="Обход блокировок">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}">
 
       <ui:CardControl Margin="{StaticResource CardSpacing}">
@@ -114,5 +113,4 @@
         </StackPanel>
       </ui:CardAction>
     </StackPanel>
-  </ScrollViewer>
 </Page>

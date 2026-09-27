@@ -123,9 +123,17 @@ public sealed partial class GamesViewModel : ObservableObject
         OnPropertyChanged(nameof(RecordButtonText));
     }
 
+    // Name filled in from the process; replaced when another process is picked, unless the user edited it.
+    private string? _autoName;
+
     partial void OnSelectedProcessChanged(ProcessChoice? value)
     {
-        if (value is not null && GameName.Length == 0) GameName = value.Title;
+        if (value is null) return;
+        if (GameName.Length == 0 || GameName == _autoName)
+        {
+            GameName = value.Title;
+            _autoName = value.Title;
+        }
     }
 
     internal void Refresh(AppController c)
@@ -171,6 +179,7 @@ public sealed partial class GamesViewModel : ObservableObject
         _learned = new TrafficLearner();
         LearningTitle = _relearnTarget is null ? "Добавить игру" : $"Дообучить: {_relearnTarget.Name}";
         GameName = _relearnTarget?.Name ?? "";
+        _autoName = null;
         RefreshProcesses();
         SelectedProcess = Processes.FirstOrDefault(p => string.Equals(p.ExeName, _relearnTarget?.ProcessName, StringComparison.OrdinalIgnoreCase));
         ProcessText = SelectedProcess?.ToString() ?? _relearnTarget?.ProcessName ?? "";

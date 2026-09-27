@@ -49,6 +49,7 @@ static class Program
             ("games", 740, () => window.Navigate("Games")),
             ("games-learning", 1000, () => { shell.Games.LoadLearningSample(); window.Navigate("Games"); }),
             ("vpn", 1250, () => window.Navigate("Vpn")),
+            ("vpn-small", 600, () => window.Navigate("Vpn")),
             ("telegram", 740, () => window.Navigate("Telegram")),
             ("settings", 900, () => window.Navigate("Settings")),
         };
@@ -63,6 +64,7 @@ static class Program
                     setup();
                     await Settle(window);
                     Save(window, Path.Combine(outDir, name + ".png"));
+                    if (Environment.GetEnvironmentVariable("UIPREVIEW_SCROLL") == "1") DumpScroll(window, name, outDir);
                 }
             }
             catch (Exception ex)
@@ -87,6 +89,42 @@ static class Program
             await Task.Delay(150);
             await w.Dispatcher.InvokeAsync(() => w.UpdateLayout(), DispatcherPriority.ApplicationIdle);
         }
+    }
+
+    // Diagnostics: every ScrollViewer on screen with its sizes, to prove long pages can scroll.
+    private static void DumpScroll(Window w, string name, string outDir)
+    {
+        var lines = new List<string>();
+        void Walk(DependencyObject d, int depth)
+        {
+            if (d is System.Windows.Controls.ScrollViewer sv)
+                lines.Add($"{name} depth={depth} viewport={sv.ViewportHeight:F0} extent={sv.ExtentHeight:F0} scrollable={sv.ScrollableHeight:F0} bar={sv.ComputedVerticalScrollBarVisibility} type={sv.GetType().Name} parentOf={(sv.Content?.GetType().Name ?? "-")}");
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i), depth + 1);
+        }
+        Walk(w, 0);
+
+        // Wheel over a card deep inside the page must scroll the page.
+        System.Windows.Controls.TextBlock? deep = null;
+        System.Windows.Controls.ScrollViewer? pageScroller = null;
+        void Find(DependencyObject d)
+        {
+            if (d is System.Windows.Controls.ScrollViewer { ScrollableHeight: > 0 } sv && pageScroller is null) pageScroller = sv;
+            if (pageScroller is not null && d is System.Windows.Controls.TextBlock tb && deep is null && tb.IsVisible) deep = tb;
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Find(VisualTreeHelper.GetChild(d, i));
+        }
+        Find(w);
+        if (pageScroller is not null && deep is not null)
+        {
+            var before = pageScroller.VerticalOffset;
+            var args = new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120)
+            {
+                RoutedEvent = UIElement.MouseWheelEvent,
+            };
+            deep.RaiseEvent(args);
+            pageScroller.UpdateLayout();
+            lines.Add($"{name} wheel: offset {before:F0} -> {pageScroller.VerticalOffset:F0}");
+        }
+        File.AppendAllLines(Path.Combine(outDir, "scroll.txt"), lines);
     }
 
     private static void Save(Window w, string path)

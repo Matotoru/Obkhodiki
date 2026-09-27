@@ -4,7 +4,6 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="Игры">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}">
 
       <Grid Margin="0,0,0,12">
@@ -141,5 +140,4 @@
         </StackPanel>
       </ui:Card>
     </StackPanel>
-  </ScrollViewer>
 </Page>

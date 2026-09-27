@@ -4,7 +4,6 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
   Title="Telegram">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="{StaticResource PagePadding}">
       <ui:CardControl Margin="{StaticResource CardSpacing}">
         <ui:CardControl.Icon>
@@ -35,5 +34,4 @@
       <ui:InfoBar IsClosable="False" IsOpen="True" Severity="Informational" Title="Как это работает"
                   Message="Прокси работает от вашего пользователя, без прав администратора. У него есть свой значок в трее и окно настроек; обновления ставятся из ZapretHub после подтверждения." />
     </StackPanel>
-  </ScrollViewer>
 </Page>
