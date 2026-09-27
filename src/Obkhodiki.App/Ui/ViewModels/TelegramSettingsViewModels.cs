@@ -166,6 +166,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         Components[3].UpdateVersion = c.AvailableSbUpdate?.Version;
     }
 
+    public IReadOnlyList<Obkhodiki.Core.Updates.AppInfo.Credit> Credits => Obkhodiki.Core.Updates.AppInfo.Credits;
+
+    // Opened as the desktop user: a browser started from this elevated process would run as admin.
+    [RelayCommand]
+    private static async Task OpenCredit(Obkhodiki.Core.Updates.AppInfo.Credit? credit)
+    {
+        if (credit is null) return;
+        try
+        {
+            await Task.Run(() => TgProxyRunner.OpenAsUser(credit.Url));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Credit link could not be opened", ex);
+        }
+    }
+
     [RelayCommand]
     private static Task ShowWhatsNew() => WhatsNewDialog.ShowAsync(Obkhodiki.Core.Updates.Changelog.Entries.Take(3).ToList());
 

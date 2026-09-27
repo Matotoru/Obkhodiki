@@ -106,6 +106,12 @@ internal sealed partial class AppController
         // Panels pick the output format by client name; this asks for the plain list of share links.
         request.Headers.UserAgent.ParseAdd("v2rayN/7.0");
         request.Headers.UserAgent.ParseAdd("Obkhodiki/" + (typeof(AppController).Assembly.GetName().Version?.ToString(3) ?? "0"));
+        // Panels with a device limit (Remnawave: BuzzVPN and others) answer only clients that identify the device;
+        // without it they redirect to their web cabinet.
+        request.Headers.Add("x-hwid", DeviceId.Value);
+        request.Headers.Add("x-device-os", "Windows");
+        request.Headers.Add("x-ver-os", Environment.OSVersion.Version.ToString(2));
+        request.Headers.Add("x-device-model", "Obkhodiki");
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > MaxSubscriptionSize) throw new InvalidDataException("Подписка слишком большая.");
@@ -337,4 +343,24 @@ internal sealed partial class AppController
             if (ReferenceEquals(_autoPingCts, cts)) _autoPingCts = null;
         }
     }
+
+    /// <summary>
+    /// Stable per-computer device id for subscription panels: a hash of the Windows installation id, so the
+    /// panel counts this PC as one device across restarts and reinstalls of the app, and never sees the id itself.
+    /// </summary>
+    private static readonly Lazy<string> DeviceId = new(() =>
+    {
+        string? machine = null;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+            machine = key?.GetValue("MachineGuid") as string;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException)
+        {
+            Log.Error("MachineGuid unreadable", ex);
+        }
+        var seed = "Obkhodiki.device|" + (machine ?? Environment.MachineName);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(seed)))[..32].ToLowerInvariant();
+    });
 }

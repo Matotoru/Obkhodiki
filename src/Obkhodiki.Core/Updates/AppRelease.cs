@@ -13,6 +13,23 @@ public static class AppInfo
     public const string AuthorName = "matotoru";
     public const string AuthorUrl = "https://github.com/Matotoru";
 
+    public sealed record Credit(string Project, string Author, string License, string Role, string Url);
+
+    /// <summary>Projects Obkhodiki is built on (same list as THIRD-PARTY-NOTICES.md).</summary>
+    public static IReadOnlyList<Credit> Credits { get; } = new[]
+    {
+        new Credit("zapret", "bol-van", "MIT", "движок обхода DPI (winws)", "https://github.com/bol-van/zapret"),
+        new Credit("zapret-discord-youtube", "Flowseal", "MIT", "стратегии и сборка zapret для Windows", "https://github.com/Flowseal/zapret-discord-youtube"),
+        new Credit("WinDivert", "basil00", "LGPL-3.0 / GPL-2.0", "драйвер перехвата пакетов", "https://github.com/basil00/WinDivert"),
+        new Credit("tg-ws-proxy", "Flowseal", "MIT", "прокси для Telegram", "https://github.com/Flowseal/tg-ws-proxy"),
+        new Credit("sing-box", "nekohasekai (SagerNet)", "GPL-3.0", "туннель к VPS", "https://github.com/SagerNet/sing-box"),
+        new Credit("sing-geosite / sing-geoip", "nekohasekai (SagerNet)", "GPL-3.0", "наборы правил маршрутизации", "https://github.com/SagerNet/sing-geosite"),
+        new Credit("russia-v2ray-rules-dat", "runetfreedom", "GPL-3.0", "список заблокированного в России", "https://github.com/runetfreedom/russia-v2ray-rules-dat"),
+        new Credit("WPF UI", "Leszek Pomianowski и участники", "MIT", "оформление окна", "https://github.com/lepoco/wpfui"),
+        new Credit(".NET Community Toolkit", ".NET Foundation", "MIT", "MVVM", "https://github.com/CommunityToolkit/dotnet"),
+        new Credit(".NET", ".NET Foundation", "MIT", "платформа", "https://github.com/dotnet/runtime"),
+    };
+
     /// <summary>Release asset name the CI workflow produces.</summary>
     public static string AssetName(string version) => $"{Name}-{version}-win-x64.zip";
 }
@@ -39,6 +56,12 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.4.1", new[]
+        {
+            "Подписки с ограничением по устройствам (BuzzVPN и другие панели Remnawave) теперь добавляются: программа сообщает панели постоянный идентификатор этого компьютера.",
+            "Подписки в формате JSON (для Happ, v2RayTun, Incy) разбираются: серверы VLESS, Trojan и Shadowsocks из них попадают в список с их названиями.",
+            "В «Настройках» — раздел «Авторы и благодарности» со ссылками на проекты, на которых построен Obkhodiki.",
+        }),
         new Entry("0.4.0", new[]
         {
             "Новое имя: Obkhodiki. Настройки, серверы и игры перенесены автоматически.",

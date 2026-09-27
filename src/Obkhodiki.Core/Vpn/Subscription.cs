@@ -67,7 +67,20 @@ public sealed record SubscriptionContent(IReadOnlyList<string> Links, IReadOnlyL
         var servers = new List<VpnServerEntry>();
         var skipped = new List<string>();
         var seen = new HashSet<string>();
-        foreach (var line in text.Split('\n').Select(l => l.Trim()))
+        IEnumerable<string> lines = text.Split('\n');
+        if (XrayJsonSubscription.LooksLikeJson(text))
+        {
+            try
+            {
+                lines = XrayJsonSubscription.ToLinks(text, skipped);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                skipped.Add("ответ похож на JSON, но не читается");
+                lines = Array.Empty<string>();
+            }
+        }
+        foreach (var line in lines.Select(l => l.Trim()))
         {
             if (line.Length == 0 || line.StartsWith('#')) continue;
             if (servers.Count >= MaxServers)

@@ -85,3 +85,22 @@ dotnet run --project tools/UiPreview -c Release -- ui-preview
 ```bash
 dotnet test
 ```
+
+## Авторы и благодарности
+
+Obkhodiki сделан [matotoru](https://github.com/Matotoru) на основе этих проектов — спасибо их авторам:
+
+| Проект | Автор | Лицензия | Зачем |
+|---|---|---|---|
+| [zapret](https://github.com/bol-van/zapret) | bol-van | MIT | движок обхода DPI (winws) |
+| [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) | Flowseal | MIT | стратегии и сборка zapret для Windows |
+| [WinDivert](https://github.com/basil00/WinDivert) | basil00 | LGPL-3.0 / GPL-2.0 | драйвер перехвата пакетов |
+| [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) | Flowseal | MIT | прокси для Telegram |
+| [sing-box](https://github.com/SagerNet/sing-box) | nekohasekai (SagerNet) | GPL-3.0 | туннель к VPS |
+| [sing-geosite](https://github.com/SagerNet/sing-geosite), [sing-geoip](https://github.com/SagerNet/sing-geoip) | nekohasekai (SagerNet) | GPL-3.0 | наборы правил маршрутизации |
+| [russia-v2ray-rules-dat](https://github.com/runetfreedom/russia-v2ray-rules-dat) | runetfreedom | GPL-3.0 | список заблокированного в России |
+| [WPF UI](https://github.com/lepoco/wpfui) | Leszek Pomianowski и участники | MIT | оформление окна |
+| [.NET Community Toolkit](https://github.com/CommunityToolkit/dotnet) | .NET Foundation | MIT | MVVM |
+| [.NET](https://github.com/dotnet/runtime) | .NET Foundation | MIT | платформа |
+
+zapret, стратегии Flowseal, tg-ws-proxy, sing-box и наборы правил не входят в архив Obkhodiki: программа скачивает их из официальных релизов авторов и запускает без изменений. Тексты лицензий встроенных библиотек — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

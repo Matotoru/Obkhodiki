@@ -46,7 +46,9 @@ jobs:
 
       - name: Zip
         shell: pwsh
-        run: Compress-Archive -Path out/* -DestinationPath "Obkhodiki-${{ steps.version.outputs.version }}-win-x64.zip"
+        run: |
+          Copy-Item THIRD-PARTY-NOTICES.md out/
+          Compress-Archive -Path out/* -DestinationPath "Obkhodiki-${{ steps.version.outputs.version }}-win-x64.zip"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

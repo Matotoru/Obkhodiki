@@ -52,7 +52,7 @@ static class Program
             ("vpn-small", 600, () => window.Navigate("Vpn")),
             ("vpn-selective", 1500, () => { shell.Vpn.FullTunnel = false; window.Navigate("Vpn"); }),
             ("telegram", 740, () => window.Navigate("Telegram")),
-            ("settings", 900, () => window.Navigate("Settings")),
+            ("settings", 1400, () => window.Navigate("Settings")),
         };
 
         window.Loaded += async (_, _) =>
