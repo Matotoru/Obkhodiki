@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using ZapretHub.Core.Telegram;
 using ZapretHub.Core.Updates;

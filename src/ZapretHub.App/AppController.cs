@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Windows.Forms;
 using System.Security.Cryptography;
 using System.ServiceProcess;
 using ZapretHub.Core.Engine;
@@ -52,6 +54,13 @@ internal sealed partial class AppController : IDisposable
     public ReleaseInfo? AvailableUpdate => _availableUpdate;
 
     public AppSettings Settings { get; }
+
+    public Task SetCheckUpdatesOnStartAsync(bool value) => Serialized("Сохранение настроек…", silentErrors: false, () =>
+    {
+        Settings.CheckUpdatesOnStart = value;
+        _settingsStore.Save(Settings);
+        return Task.CompletedTask;
+    });
     public EngineLayout? Engine => _engine;
     public bool IsRunning => _runner.IsRunning;
     public string? BusyText => _busyText;
@@ -526,7 +535,7 @@ internal sealed partial class AppController : IDisposable
     {
         UpdateAnnounced?.Invoke(product);
         Notify?.Invoke($"Доступно обновление {product}",
-            $"Версия {version}. Нажмите на это уведомление или выберите пункт в меню, чтобы установить.", ToolTipIcon.Info);
+            $"Версия {version}. Нажмите на это уведомление или откройте «Настройки», чтобы установить.", ToolTipIcon.Info);
     }
 
     private void SetBusy(string text)

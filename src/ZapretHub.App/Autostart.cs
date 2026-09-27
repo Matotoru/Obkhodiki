@@ -17,6 +17,9 @@ internal static class Autostart
 {
     private const string TaskName = "ZapretHub";
 
+    /// <summary>Start minimized to the tray: at logon nobody asked for the window.</summary>
+    public const string TrayArgument = "--tray";
+
     public static string InstalledExe => Path.Combine(AppPaths.InstallDir, "ZapretHub.exe");
 
     public static bool IsEnabled() => RunSchtasks("/query", "/tn", TaskName) == 0;
@@ -38,6 +41,27 @@ internal static class Autostart
         }
         Log.Info($"Autostart enabled for {InstalledExe}");
         return copied;
+    }
+
+    /// <summary>
+    /// Re-installs the autostart copy when it is older than the running app (e.g. after an update from a new
+    /// publish folder), so logon does not keep starting the old version. Never downgrades.
+    /// </summary>
+    /// <returns>True when the copy was refreshed.</returns>
+    public static bool RefreshIfOutdated()
+    {
+        var running = typeof(Autostart).Assembly.GetName().Version;
+        var source = Path.GetFullPath(AppContext.BaseDirectory);
+        var target = Path.GetFullPath(AppPaths.InstallDir) + Path.DirectorySeparatorChar;
+        if (running is null || string.Equals(source, target, StringComparison.OrdinalIgnoreCase) || !IsEnabled()) return false;
+
+        Version? installed = null;
+        if (File.Exists(InstalledExe) && Version.TryParse(FileVersionInfo.GetVersionInfo(InstalledExe).FileVersion, out var v)) installed = v;
+        if (installed is not null && installed >= running) return false;
+
+        Log.Info($"Autostart copy {installed?.ToString() ?? "missing"} is older than {running}, refreshing");
+        Enable();
+        return true;
     }
 
     public static void Disable()
@@ -75,6 +99,7 @@ internal static class Autostart
               <Actions Context="Author">
                 <Exec>
                   <Command>{SecurityElement.Escape(exe)}</Command>
+                  <Arguments>{TrayArgument}</Arguments>
                   <WorkingDirectory>{SecurityElement.Escape(Path.GetDirectoryName(exe)!)}</WorkingDirectory>
                 </Exec>
               </Actions>
@@ -93,6 +118,9 @@ internal static class Autostart
         "ZapretHub.runtimeconfig.json",
         "System.ServiceProcess.ServiceController.dll",
         "System.Diagnostics.EventLog.dll",
+        "Wpf.Ui.dll",
+        "Wpf.Ui.Abstractions.dll",
+        "CommunityToolkit.Mvvm.dll",
     };
 
     // Present in a plain build output; a RID-specific publish flattens them into the root.

@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Windows.Forms;
 namespace ZapretHub.App;
 
 internal static class Dialogs

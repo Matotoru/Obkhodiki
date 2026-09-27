@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Windows.Forms;
 using System.Diagnostics;
 using System.Text;
 using ZapretHub.Core.Games;
