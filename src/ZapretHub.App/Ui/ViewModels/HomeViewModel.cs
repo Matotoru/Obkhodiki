@@ -22,6 +22,8 @@ public sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty] private string _vpnSummary = "";
     [ObservableProperty] private int _updatesAvailable;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _hasVpn;
+    [ObservableProperty] private bool _vpnFull;
 
     public bool CanToggle => EngineReady && !IsBusy;
 
@@ -39,6 +41,12 @@ public sealed partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusSubtitle));
         if (_syncing) return;
         _ = _shell.RunAsync(c => value ? c.EnableAsync() : c.DisableAsync());
+    }
+
+    partial void OnVpnFullChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetVpnFullTunnelAsync(value));
     }
 
     partial void OnStrategyNameChanged(string value) => OnPropertyChanged(nameof(StatusSubtitle));
@@ -73,7 +81,14 @@ public sealed partial class HomeViewModel : ObservableObject
             TelegramSummary = c.TgVersion is null ? "Не установлен" : TelegramOn ? $"Прокси работает · {c.TgVersion}" : "Прокси выключен";
 
             VpnOn = c.IsVpnRunning;
-            VpnSummary = c.VpnServerName is null ? "Сервер не добавлен" : VpnOn ? "Туннель работает" : "Готов, сейчас не нужен";
+            HasVpn = c.VpnServerName is not null;
+            if (!IsBusy) VpnFull = c.Settings.VpnFullTunnel;
+            var server = c.VpnServers.FirstOrDefault(s => s.Tag == c.ActiveServerTag)?.Server;
+            var serverName = server is null ? "" : " · " + (server.Name ?? server.Host);
+            VpnSummary = c.VpnServerName is null ? "Сервер не добавлен"
+                : VpnFull ? "Весь трафик" + serverName
+                : VpnOn ? "Выборочно" + serverName
+                : "Готов, сейчас не нужен";
 
             UpdatesAvailable = new object?[] { c.AvailableUpdate, c.AvailableTgUpdate, c.AvailableSbUpdate }.Count(u => u is not null);
         }
@@ -101,7 +116,11 @@ public sealed partial class HomeViewModel : ObservableObject
         TelegramOn = true;
         TelegramSummary = "Прокси работает · 1.3.0";
         VpnOn = true;
-        VpnSummary = "Туннель работает";
+        HasVpn = true;
+        _syncing = true;
+        VpnFull = true;
+        _syncing = false;
+        VpnSummary = "Весь трафик · Нидерланды";
         UpdatesAvailable = 1;
     }
 

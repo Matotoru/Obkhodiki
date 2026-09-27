@@ -35,11 +35,19 @@
         </UniformGrid>
       </Border>
     </DataTemplate>
+    <DataTemplate x:Key="CategoryTemplate">
+      <CheckBox Margin="0,4,12,4" IsChecked="{Binding IsChecked}">
+        <StackPanel>
+          <TextBlock Text="{Binding Title}" />
+          <TextBlock Style="{StaticResource Caption}" Text="{Binding Description}" Visibility="{Binding Description, Converter={StaticResource NullToVisibility}}" />
+        </StackPanel>
+      </CheckBox>
+    </DataTemplate>
   </Page.Resources>
 
     <StackPanel Margin="{StaticResource PagePadding}">
 
-      <!-- Server. -->
+      <!-- Source: a subscription or one server. -->
       <ui:CardControl Margin="{StaticResource CardSpacing}" Visibility="{Binding ShowServerForm, Converter={StaticResource InverseBoolToVisibility}}">
         <ui:CardControl.Icon>
           <ui:SymbolIcon Symbol="Cloud24" />
@@ -47,15 +55,31 @@
         <ui:CardControl.Header>
           <StackPanel>
             <StackPanel Orientation="Horizontal">
-              <TextBlock FontWeight="SemiBold" Text="Сервер Hysteria2" />
+              <TextBlock FontWeight="SemiBold">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Text" Value="Сервер" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsSubscription}" Value="True">
+                        <Setter Property="Text" Value="Подписка" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
               <Border Margin="10,0,0,0" Padding="8,1" CornerRadius="8" Background="#336CCB5F" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock FontSize="11" Foreground="#6CCB5F" Text="туннель работает" />
               </Border>
             </StackPanel>
             <TextBlock Style="{StaticResource Caption}" Text="{Binding ServerName}" />
+            <TextBlock Style="{StaticResource Caption}" Text="{Binding SourceDetails}" Visibility="{Binding SourceDetails, Converter={StaticResource NullToVisibility}}" />
+            <TextBlock Style="{StaticResource Caption}" Foreground="#FFC857" Text="Есть серверы без проверки сертификата"
+                       Visibility="{Binding HasInsecure, Converter={StaticResource BoolToVisibility}}" />
           </StackPanel>
         </ui:CardControl.Header>
         <StackPanel Orientation="Horizontal">
+          <ui:Button Content="Обновить" Command="{Binding RefreshSubscriptionCommand}" Margin="0,0,8,0" Icon="{ui:SymbolIcon ArrowSync24}"
+                     Visibility="{Binding IsSubscription, Converter={StaticResource BoolToVisibility}}" />
           <ui:Button Content="Заменить" Command="{Binding EditServerCommand}" Margin="0,0,8,0" />
           <ui:Button Content="Удалить" Command="{Binding RemoveServerCommand}" />
         </StackPanel>
@@ -63,10 +87,10 @@
 
       <ui:Card Padding="20" Margin="{StaticResource CardSpacing}" Visibility="{Binding ShowServerForm, Converter={StaticResource BoolToVisibility}}">
         <StackPanel>
-          <TextBlock FontSize="16" FontWeight="SemiBold" Text="Сервер Hysteria2" />
+          <TextBlock FontSize="16" FontWeight="SemiBold" Text="Подписка или сервер" />
           <TextBlock Margin="0,4,0,12" Style="{StaticResource Caption}"
-                     Text="Вставьте ссылку hysteria2://… или hy2://… Она хранится зашифрованной в папке, доступной только администраторам, и никуда не отправляется." />
-          <ui:PasswordBox PlaceholderText="hysteria2://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
+                     Text="Вставьте ссылку подписки из 3x-ui (https://…/sub/…) или ссылку одного сервера: vless://, hysteria2://, trojan://, ss://. Она хранится зашифрованной в папке, доступной только администраторам." />
+          <ui:PasswordBox PlaceholderText="https://…/sub/…  или  vless://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
           <TextBlock Margin="0,8,0,0" Foreground="#FF99A4" TextWrapping="Wrap" Text="{Binding ServerError}"
                      Visibility="{Binding ServerError, Converter={StaticResource NullToVisibility}}" />
           <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
@@ -77,48 +101,146 @@
         </StackPanel>
       </ui:Card>
 
-      <!-- What goes through the VPS. -->
-      <TextBlock Style="{StaticResource SectionTitle}" Text="Что пускать через VPS" />
-      <ui:Card Padding="20" Margin="{StaticResource CardSpacing}" IsEnabled="{Binding HasServer}">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="24" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
+      <!-- Main switch. -->
+      <ui:CardControl Margin="{StaticResource CardSpacing}" Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="Globe24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
           <StackPanel>
-            <TextBlock FontWeight="SemiBold" Text="Программы" />
-            <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="Весь трафик программы идёт через VPS." />
-            <DockPanel>
-              <ui:Button DockPanel.Dock="Right" Margin="8,0,0,0" Icon="{ui:SymbolIcon Add24}" Command="{Binding AddProgramCommand}" ToolTip="Добавить" />
-              <ComboBox IsEditable="True" ItemsSource="{Binding RunningPrograms}" Text="{Binding NewProgram}" DropDownOpened="OnProgramsDropDown" />
+            <TextBlock FontWeight="SemiBold" Text="Весь трафик через VPS" />
+            <TextBlock Style="{StaticResource Caption}"
+                       Text="Кроме российских сайтов и игр с маршрутом «Напрямую». Выключено — через VPS идёт только выбранное ниже." />
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ui:ToggleSwitch IsChecked="{Binding FullTunnel}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+      </ui:CardControl>
+
+      <!-- Servers. -->
+      <StackPanel Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}">
+        <TextBlock Style="{StaticResource SectionTitle}" Text="Серверы" />
+        <ui:Card Padding="20,14" Margin="{StaticResource CardSpacing}">
+          <StackPanel>
+            <DockPanel Visibility="{Binding ManyServers, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,10">
+              <ui:Button DockPanel.Dock="Right" Content="Проверить пинг" Icon="{ui:SymbolIcon Gauge24}" Command="{Binding PingServersCommand}"
+                         IsEnabled="{Binding IsPinging, Converter={StaticResource InverseBool}}" />
+              <ui:ToggleSwitch DockPanel.Dock="Left" IsChecked="{Binding AutoBest}" VerticalAlignment="Center" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+              <StackPanel Margin="10,0,12,0" VerticalAlignment="Center">
+                <TextBlock FontWeight="SemiBold" Text="Автовыбор лучшего сервера" />
+                <TextBlock Style="{StaticResource Caption}" Text="Каждые 5 минут сравнивает пинг и переключает без разрыва. Пока идёт игра — не трогает." />
+              </StackPanel>
             </DockPanel>
-            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Programs}">
+            <TextBlock Margin="0,0,0,6" Style="{StaticResource Caption}" Text="{Binding PingStatus}" Visibility="{Binding PingStatus, Converter={StaticResource NullToVisibility}}" />
+            <ItemsControl ItemsSource="{Binding Servers}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Margin="0,2" Padding="10,6" CornerRadius="4" Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                    <DockPanel>
-                      <ui:Button DockPanel.Dock="Right" Padding="4" Appearance="Transparent" Icon="{ui:SymbolIcon Dismiss24}" ToolTip="Убрать"
-                                 Command="{Binding DataContext.RemoveProgramCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}" />
-                      <TextBlock VerticalAlignment="Center" Text="{Binding}" />
-                    </DockPanel>
-                  </Border>
+                  <ui:Button Margin="0,2" Padding="12,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Appearance="Transparent"
+                             Command="{Binding DataContext.SelectServerCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}"
+                             ToolTip="Выбрать этот сервер (автовыбор выключится)">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <ui:SymbolIcon Symbol="CheckmarkCircle24" Filled="True" Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                                     Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}" />
+                      <StackPanel Grid.Column="1">
+                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Style="{StaticResource Caption}" Text="{Binding Details}" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding PingText}">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsDown}" Value="True">
+                                <Setter Property="Foreground" Value="#FF99A4" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </Grid>
+                  </ui:Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
           </StackPanel>
-          <StackPanel Grid.Column="2">
-            <TextBlock FontWeight="SemiBold" Text="Сайты" />
-            <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="По одному на строку, поддомены включаются. DNS для них тоже идёт через VPS." />
-            <ui:TextBox MinHeight="120" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
-                        PlaceholderText="chatgpt.com" Text="{Binding DomainsText, UpdateSourceTrigger=PropertyChanged}" />
-          </StackPanel>
-        </Grid>
-      </ui:Card>
-      <DockPanel Margin="0,0,0,4" LastChildFill="False">
-        <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Style="{StaticResource Caption}" Text="{Binding ListsMessage}" />
-        <ui:Button DockPanel.Dock="Right" Content="Сохранить списки" Appearance="Primary" Command="{Binding SaveListsCommand}" IsEnabled="{Binding ListsDirty}" />
-      </DockPanel>
+        </ui:Card>
+      </StackPanel>
+
+      <!-- Full tunnel: what stays direct. -->
+      <StackPanel Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel Visibility="{Binding FullTunnel, Converter={StaticResource BoolToVisibility}}">
+          <TextBlock Style="{StaticResource SectionTitle}" Text="Что оставить напрямую" />
+          <ui:Card Padding="20" Margin="{StaticResource CardSpacing}">
+            <StackPanel>
+              <ItemsControl ItemsSource="{Binding DirectCategories}" ItemTemplate="{StaticResource CategoryTemplate}" />
+              <TextBlock Margin="0,8,0,0" Style="{StaticResource Caption}"
+                         Text="Игры с маршрутом «Напрямую» (и «Авто», если замер выбрал прямой путь) тоже идут мимо VPS, через zapret." />
+            </StackPanel>
+          </ui:Card>
+        </StackPanel>
+
+        <!-- Selective: what goes through the VPS. -->
+        <StackPanel Visibility="{Binding FullTunnel, Converter={StaticResource InverseBoolToVisibility}}">
+          <TextBlock Style="{StaticResource SectionTitle}" Text="Что пускать через VPS" />
+          <ui:Card Padding="20" Margin="{StaticResource CardSpacing}">
+            <StackPanel>
+              <TextBlock FontWeight="SemiBold" Text="Категории" />
+              <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="Готовые списки сайтов и адресов, обновляются раз в неделю." />
+              <ItemsControl ItemsSource="{Binding ProxyCategories}" ItemTemplate="{StaticResource CategoryTemplate}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <UniformGrid Columns="2" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+
+              <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="24" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold" Text="Программы" />
+                  <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="Весь трафик программы идёт через VPS." />
+                  <DockPanel>
+                    <ui:Button DockPanel.Dock="Right" Margin="8,0,0,0" Icon="{ui:SymbolIcon Add24}" Command="{Binding AddProgramCommand}" ToolTip="Добавить" />
+                    <ComboBox IsEditable="True" ItemsSource="{Binding RunningPrograms}" Text="{Binding NewProgram}" DropDownOpened="OnProgramsDropDown" />
+                  </DockPanel>
+                  <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Programs}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Margin="0,2" Padding="10,6" CornerRadius="4" Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                          <DockPanel>
+                            <ui:Button DockPanel.Dock="Right" Padding="4" Appearance="Transparent" Icon="{ui:SymbolIcon Dismiss24}" ToolTip="Убрать"
+                                       Command="{Binding DataContext.RemoveProgramCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}" />
+                            <TextBlock VerticalAlignment="Center" Text="{Binding}" />
+                          </DockPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock FontWeight="SemiBold" Text="Сайты" />
+                  <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="По одному на строку, поддомены включаются. DNS для них тоже идёт через VPS." />
+                  <ui:TextBox MinHeight="120" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                              PlaceholderText="chatgpt.com" Text="{Binding DomainsText, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </ui:Card>
+        </StackPanel>
+
+        <DockPanel Margin="0,0,0,4" LastChildFill="False">
+          <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Style="{StaticResource Caption}" Text="{Binding ListsMessage}" />
+          <ui:Button DockPanel.Dock="Right" Content="Сохранить" Appearance="Primary" Command="{Binding SaveListsCommand}" IsEnabled="{Binding ListsDirty}" />
+        </DockPanel>
+      </StackPanel>
 
       <!-- Quality. -->
       <TextBlock Style="{StaticResource SectionTitle}" Text="Качество канала" />

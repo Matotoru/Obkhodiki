@@ -68,10 +68,7 @@ internal sealed class TrayHost : IDisposable
         };
         _tray.BalloonTipClosed += (_, _) => _updateBalloonProduct = null;
 
-        _controller.ConfirmInsecureServer = () => Confirm("VPS",
-            "В ссылке отключена проверка сертификата (insecure=1).\n\n" +
-            "Тогда оборудование по пути (например, ТСПУ) может выдать себя за ваш сервер, узнать пароль и видеть трафик туннеля. " +
-            "Надёжнее выпустить на сервере настоящий сертификат (например, Let's Encrypt).\n\nВсё равно сохранить?");
+        _controller.ConfirmVpnRisk = text => Confirm("VPS", text);
         _controller.ConfirmStopForeignTg = () => Confirm("Telegram",
             "Уже запущен отдельно установленный TG WS Proxy. Он занимает тот же порт, что и прокси ZapretHub.\n\n" +
             "Закрыть его и запустить прокси из ZapretHub?");
@@ -181,6 +178,15 @@ internal sealed class TrayHost : IDisposable
         {
             Enabled = ready,
         });
+        if (_controller.VpnServerName is not null)
+        {
+            var full = _controller.Settings.VpnFullTunnel;
+            _menu.Items.Add(new Forms.ToolStripMenuItem("VPS: весь трафик", null, async (_, _) => await _controller.SetVpnFullTunnelAsync(!full))
+            {
+                Checked = full,
+                Enabled = _controller.BusyText is null,
+            });
+        }
         if (_shell.Bypass.IsSelecting)
         {
             _menu.Items.Add(new Forms.ToolStripMenuItem("■ Остановить подбор стратегии", null, (_, _) => _shell.Bypass.CancelAutoSelect()));

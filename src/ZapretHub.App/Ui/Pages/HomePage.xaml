@@ -31,6 +31,20 @@
         </Grid>
       </ui:Card>
 
+      <!-- The second main switch: the whole connection through the VPS. -->
+      <ui:CardControl Margin="0,0,0,12" Visibility="{Binding HasVpn, Converter={StaticResource BoolToVisibility}}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="Globe24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="VPS: весь трафик" />
+            <TextBlock Style="{StaticResource Caption}" Text="Всё через ваш сервер, кроме российских сайтов и игр с прямым маршрутом" />
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ui:ToggleSwitch IsChecked="{Binding VpnFull}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+      </ui:CardControl>
+
       <!-- Modules at a glance. -->
       <UniformGrid Columns="3" Margin="-6,0,-6,0">
         <ui:CardAction Margin="6" Command="{Binding NavigateCommand}" CommandParameter="Games">

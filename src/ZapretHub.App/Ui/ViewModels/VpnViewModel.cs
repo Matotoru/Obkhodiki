@@ -28,7 +28,43 @@ public sealed partial class PathStatsViewModel : ObservableObject
     }
 }
 
-/// <summary>VPS: server, what goes through it, and the path quality check.</summary>
+/// <summary>One server of the source, with its last ping.</summary>
+public sealed partial class ServerRowViewModel : ObservableObject
+{
+    public required string Tag { get; init; }
+    public required string Name { get; init; }
+    public required string Details { get; init; }
+    [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private string _pingText = "—";
+    [ObservableProperty] private bool _isDown;
+}
+
+/// <summary>A routing category checkbox.</summary>
+public sealed partial class CategoryOption : ObservableObject
+{
+    private readonly Action _changed;
+
+    public CategoryOption(RuleCategory category, Action changed)
+    {
+        Id = category.Id;
+        Title = category.Title;
+        Description = category.Description;
+        _changed = changed;
+    }
+
+    public string Id { get; }
+    public string Title { get; }
+    public string? Description { get; }
+    internal bool Syncing { get; set; }
+    [ObservableProperty] private bool _isChecked;
+
+    partial void OnIsCheckedChanged(bool value)
+    {
+        if (!Syncing) _changed();
+    }
+}
+
+/// <summary>VPS: servers, what goes through them, and the path quality check.</summary>
 public sealed partial class VpnViewModel : ObservableObject
 {
     private readonly ShellViewModel _shell;
@@ -37,6 +73,22 @@ public sealed partial class VpnViewModel : ObservableObject
     public ObservableCollection<string> Programs { get; } = new();
     public ObservableCollection<string> RunningPrograms { get; } = new();
     public ObservableCollection<QualityTarget> Targets { get; } = new();
+
+    public ObservableCollection<ServerRowViewModel> Servers { get; } = new();
+    public IReadOnlyList<CategoryOption> ProxyCategories { get; }
+    public IReadOnlyList<CategoryOption> DirectCategories { get; }
+
+    [ObservableProperty] private bool _fullTunnel;
+    [ObservableProperty] private bool _autoBest = true;
+    [ObservableProperty] private bool _isSubscription;
+    [ObservableProperty] private string? _sourceDetails;
+    [ObservableProperty] private bool _hasInsecure;
+    [ObservableProperty] private string? _pingStatus;
+    [ObservableProperty] private bool _isPinging;
+    [ObservableProperty] private bool _isBusy;
+    private bool _syncing;
+
+    public bool ManyServers => Servers.Count > 1;
 
     public PathStatsViewModel Direct { get; } = new();
     public PathStatsViewModel Tunnel { get; } = new();
@@ -62,7 +114,94 @@ public sealed partial class VpnViewModel : ObservableObject
     public bool ShowServerForm => !HasServer || IsEditingServer;
     public string MeasureButtonText => IsMeasuring ? "Остановить" : "Измерить";
 
-    public VpnViewModel(ShellViewModel shell) => _shell = shell;
+    public VpnViewModel(ShellViewModel shell)
+    {
+        _shell = shell;
+        ProxyCategories = RuleCatalog.Proxy.Select(c => new CategoryOption(c, () => ListsDirty = true)).ToList();
+        DirectCategories = RuleCatalog.Direct.Select(c => new CategoryOption(c, () => ListsDirty = true)).ToList();
+        Servers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ManyServers));
+    }
+
+    partial void OnFullTunnelChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetVpnFullTunnelAsync(value));
+    }
+
+    partial void OnAutoBestChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetVpnAutoBestAsync(value));
+    }
+
+    private static string Size(long bytes) =>
+        bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):F1} ГБ" : $"{bytes / (double)(1L << 20):F0} МБ";
+
+    private void SyncSource(AppController c)
+    {
+        var info = c.VpnSourceInfo;
+        IsSubscription = info?.IsSubscription == true;
+        HasInsecure = info?.HasInsecure == true;
+        if (info is null || !info.IsSubscription)
+        {
+            SourceDetails = null;
+        }
+        else
+        {
+            var parts = new List<string>();
+            if (info.Used is { } used) parts.Add(info.Total is { } total ? $"трафик {Size(used)} из {Size(total)}" : $"трафик {Size(used)}");
+            if (info.Expire is { } exp) parts.Add($"до {exp.ToLocalTime():dd.MM.yyyy}");
+            if (info.FetchedAt is { } at) parts.Add($"обновлена {at.ToLocalTime():dd.MM HH:mm}");
+            if (info.Skipped > 0) parts.Add($"пропущено {info.Skipped}");
+            SourceDetails = string.Join(" · ", parts);
+        }
+
+        var servers = c.VpnServers;
+        if (!servers.Select(s => s.Tag).SequenceEqual(Servers.Select(s => s.Tag)))
+        {
+            Servers.Clear();
+            foreach (var s in servers)
+            {
+                Servers.Add(new ServerRowViewModel
+                {
+                    Tag = s.Tag,
+                    Name = s.Server.Name ?? s.Server.Host,
+                    Details = $"{ProtocolTitle(s.Server)} · {s.Server.Host}:{s.Server.Port}",
+                });
+            }
+        }
+        var active = c.ActiveServerTag;
+        foreach (var row in Servers)
+        {
+            row.IsActive = row.Tag == active;
+            if (c.ServerPings.TryGetValue(row.Tag, out var p))
+            {
+                row.IsDown = p.MedianMs is null;
+                row.PingText = p.MedianMs is { } ms ? $"{ms} мс" : "нет ответа";
+            }
+            else
+            {
+                row.IsDown = false;
+                row.PingText = "—";
+            }
+        }
+
+        IsPinging = c.IsPingingServers;
+        PingStatus = c.IsPingingServers ? "Проверяю серверы…"
+            : c.Settings.VpnAutoBest && c.GameRunning ? "Автовыбор на паузе: запущена игра"
+            : c.LastPingTime is { } t ? $"Проверено в {t:HH:mm}"
+            : null;
+    }
+
+    private static string ProtocolTitle(IProxyServer s) => s switch
+    {
+        VlessLink { Tls.Security: LinkSecurity.Reality } => "VLESS Reality",
+        VlessLink v => v.Transport.Type == LinkTransportType.Tcp ? "VLESS" : $"VLESS {v.Transport.Type}",
+        Hysteria2Link => "Hysteria2",
+        TrojanLink => "Trojan",
+        ShadowsocksLink => "Shadowsocks",
+        _ => s.Protocol,
+    };
 
     partial void OnServerNameChanged(string? value) => NotifyServer();
     partial void OnIsEditingServerChanged(bool value) => NotifyServer();
@@ -79,9 +218,28 @@ public sealed partial class VpnViewModel : ObservableObject
     {
         ServerName = c.VpnServerName;
         IsRunning = c.IsVpnRunning;
+        IsBusy = c.BusyText is not null;
         SingBoxVersion = c.SingBoxVersion ?? "не установлен";
+        SyncSource(c);
+        _syncing = true;
+        // While an operation runs the switch shows what the user asked for; the result arrives with the next refresh.
+        if (!IsBusy)
+        {
+            FullTunnel = c.Settings.VpnFullTunnel;
+            AutoBest = c.Settings.VpnAutoBest;
+        }
+        _syncing = false;
         if (!ListsDirty)
         {
+            foreach (var (options, chosen) in new[] { (ProxyCategories, c.Settings.VpnProxyCategories), (DirectCategories, c.Settings.VpnDirectCategories) })
+            {
+                foreach (var o in options)
+                {
+                    o.Syncing = true;
+                    o.IsChecked = chosen.Contains(o.Id);
+                    o.Syncing = false;
+                }
+            }
             if (!c.Settings.VpnProcesses.SequenceEqual(Programs))
             {
                 Programs.Clear();
@@ -136,7 +294,7 @@ public sealed partial class VpnViewModel : ObservableObject
     {
         if (_shell.Controller is not { } c) return;
         ServerError = null;
-        var error = await c.SetVpnServerAsync(ServerLink);
+        var error = await c.SetVpnSourceAsync(ServerLink);
         if (error is not null)
         {
             ServerError = error;
@@ -144,7 +302,7 @@ public sealed partial class VpnViewModel : ObservableObject
         }
         ServerLink = "";
         IsEditingServer = false;
-        _shell.AddEvent("VPS", "Сервер сохранён.", EventKind.Success);
+        _shell.AddEvent("VPS", c.VpnSourceInfo?.IsSubscription == true ? "Подписка подключена." : "Сервер сохранён.", EventKind.Success);
         _shell.Refresh();
     }
 
@@ -215,7 +373,9 @@ public sealed partial class VpnViewModel : ObservableObject
             return;
         }
         ListsMessage = null;
-        if (await c.SetVpnListsAsync(Programs.ToList(), lines))
+        if (await c.SetVpnListsAsync(Programs.ToList(), lines,
+                ProxyCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList(),
+                DirectCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList()))
         {
             ListsDirty = false;
             ListsMessage = "Сохранено.";
@@ -226,6 +386,18 @@ public sealed partial class VpnViewModel : ObservableObject
         }
         _shell.Refresh();
     }
+
+    // ---------- servers ----------
+
+    [RelayCommand]
+    private Task RefreshSubscription() => _shell.RunAsync(c => c.RefreshSubscriptionAsync(interactive: true));
+
+    [RelayCommand]
+    private Task PingServers() => _shell.RunAsync(c => c.PingServersManuallyAsync());
+
+    [RelayCommand]
+    private Task SelectServer(ServerRowViewModel? row) =>
+        row is null || row.IsActive ? Task.CompletedTask : _shell.RunAsync(c => c.SelectVpnServerAsync(row.Tag));
 
     // ---------- quality ----------
 
@@ -289,7 +461,25 @@ public sealed partial class VpnViewModel : ObservableObject
 
     internal void LoadSample()
     {
-        ServerName = "hysteria2://***@fr2.example.com:29615 (HysteriaFR2)";
+        _syncing = true;
+        FullTunnel = true;
+        AutoBest = true;
+        _syncing = false;
+        IsSubscription = true;
+        SourceDetails = "трафик 12.4 ГБ из 100.0 ГБ · до 01.12.2026 · обновлена 27.09 13:10";
+        foreach (var (name, details, ping, active, down) in new[]
+                 {
+                     ("Нидерланды", "VLESS Reality · nl.example.com:443", "48 мс", true, false),
+                     ("Германия", "Hysteria2 · de.example.com:29615", "56 мс", false, false),
+                     ("Финляндия", "VLESS WebSocket · fi.example.com:443", "нет ответа", false, true),
+                 })
+        {
+            Servers.Add(new ServerRowViewModel { Tag = name, Name = name, Details = details, PingText = ping, IsActive = active, IsDown = down });
+        }
+        PingStatus = "Проверено в 13:12";
+        foreach (var o in DirectCategories) { o.Syncing = true; o.IsChecked = true; o.Syncing = false; }
+        foreach (var o in ProxyCategories.Take(2)) { o.Syncing = true; o.IsChecked = true; o.Syncing = false; }
+        ServerName = "Мой 3x-ui · 3 сервера";
         IsRunning = true;
         SingBoxVersion = "1.14.2";
         foreach (var p in new[] { "chrome.exe", "Spotify.exe" }) Programs.Add(p);

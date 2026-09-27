@@ -104,4 +104,61 @@ public class VpnModelTests
 
         Assert.Equal(new[] { "3.120.1.1:443" }, learner.TcpEndpoints.Select(e => e.ToString()));
     }
+    [Fact]
+    public void Plan_FullTunnel_DirectGamesAndSelfStayOff_ProxyGamesOn()
+    {
+        var settings = new AppSettings
+        {
+            VpnFullTunnel = true,
+            VpnProxyCategories = { "ru-blocked" },
+            GameProfiles =
+            {
+                Game("WarDogs.exe", GameRoute.Vpn),
+                Game("Cs2.exe", GameRoute.Direct),
+                Game("AutoDirect.exe", GameRoute.Auto),
+                Game("AutoVpn.exe", GameRoute.Auto),
+                Game("AutoNew.exe", GameRoute.Auto),
+            },
+        };
+
+        var plan = VpnPlan.From(settings, new[] { "AutoVpn.exe" }, new[] { "AutoVpn.exe", "AutoDirect.exe" });
+
+        Assert.True(plan.NeedsTunnel);
+        Assert.Equal(new[] { VpnPlan.SelfProcess, "Cs2.exe", "AutoDirect.exe" }, plan.DirectProcesses);
+        Assert.Equal(new[] { "WarDogs.exe", "AutoVpn.exe" }, plan.Processes);
+        // Default: Russian sites stay direct; selective categories are not used in this mode.
+        Assert.Equal(new[] { "ru" }, plan.ActiveCategories);
+    }
+
+    [Fact]
+    public void Plan_Selective_CategoriesAloneNeedTunnel()
+    {
+        var plan = VpnPlan.From(new AppSettings { VpnProxyCategories = { "ai" } }, Array.Empty<string>());
+        Assert.True(plan.NeedsTunnel);
+        Assert.Equal(new[] { "ai" }, plan.ActiveCategories);
+        Assert.False(VpnPlan.From(new AppSettings(), Array.Empty<string>()).NeedsTunnel);
+    }
+
+    [Fact]
+    public void Settings_UnknownCategoriesAndBadServerTagDropped()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(dir.FullName, "settings.json");
+            File.WriteAllText(path, """
+                { "VpnProxyCategories": ["ai", "nope", "ai"], "VpnDirectCategories": ["ru", "x"], "VpnSelectedServer": "../evil", "VpnFullTunnel": true }
+                """);
+            var s = new AppSettingsStore(path).Load();
+            Assert.Equal(new[] { "ai" }, s.VpnProxyCategories);
+            Assert.Equal(new[] { "ru" }, s.VpnDirectCategories);
+            Assert.Null(s.VpnSelectedServer);
+            Assert.True(s.VpnFullTunnel);
+            Assert.True(s.VpnAutoBest);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
 }

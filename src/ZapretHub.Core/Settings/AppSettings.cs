@@ -35,6 +35,21 @@ public sealed class AppSettings
     /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
     public List<string> VpnDomains { get; set; } = new();
 
+    /// <summary>"Включить VPS": everything goes through the VPS except <see cref="VpnDirectCategories"/> and direct games.</summary>
+    public bool VpnFullTunnel { get; set; }
+
+    /// <summary>Rule-set categories sent through the VPS in selective mode (ids from RuleCatalog.Proxy).</summary>
+    public List<string> VpnProxyCategories { get; set; } = new();
+
+    /// <summary>Rule-set categories kept direct in full-tunnel mode (ids from RuleCatalog.Direct).</summary>
+    public List<string> VpnDirectCategories { get; set; } = new() { "ru" };
+
+    /// <summary>Tag of the chosen server (see VpnServerEntry.TagFor).</summary>
+    public string? VpnSelectedServer { get; set; }
+
+    /// <summary>Every few minutes switch to the fastest server (paused while a game runs).</summary>
+    public bool VpnAutoBest { get; set; } = true;
+
     /// <summary>A sing-box release the user declined or that failed; background checks skip it.</summary>
     public string? SingBoxSkippedVersion { get; set; }
 }
@@ -97,6 +112,9 @@ public sealed class AppSettingsStore
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         s.VpnDomains = (s.VpnDomains ?? new()).Select(d => d is null ? null : Vpn.SingBoxConfig.NormalizeDomain(d))
             .Where(d => d is not null).Select(d => d!).Distinct().ToList();
+        s.VpnProxyCategories = Vpn.RuleCatalog.Sanitize(s.VpnProxyCategories, Vpn.RuleCatalog.Proxy);
+        s.VpnDirectCategories = Vpn.RuleCatalog.Sanitize(s.VpnDirectCategories, Vpn.RuleCatalog.Direct);
+        if (s.VpnSelectedServer is { } tag && !System.Text.RegularExpressions.Regex.IsMatch(tag, "^s-[0-9a-f]{10}$")) s.VpnSelectedServer = null;
         return s;
     }
 

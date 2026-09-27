@@ -48,8 +48,9 @@ static class Program
             ("bypass", 900, () => window.Navigate("Bypass")),
             ("games", 740, () => window.Navigate("Games")),
             ("games-learning", 1000, () => { shell.Games.LoadLearningSample(); window.Navigate("Games"); }),
-            ("vpn", 1250, () => window.Navigate("Vpn")),
+            ("vpn", 1900, () => window.Navigate("Vpn")),
             ("vpn-small", 600, () => window.Navigate("Vpn")),
+            ("vpn-selective", 1500, () => { shell.Vpn.FullTunnel = false; window.Navigate("Vpn"); }),
             ("telegram", 740, () => window.Navigate("Telegram")),
             ("settings", 900, () => window.Navigate("Settings")),
         };
