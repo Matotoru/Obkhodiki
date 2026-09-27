@@ -56,6 +56,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.4.5", new[]
+        {
+            "У программы появился свой значок — котик: на файле программы, в панели задач, в заголовке окна и в трее (с цветной точкой состояния). В окне он едва заметно выглядывает из-за страниц.",
+        }),
         new Entry("0.4.4", new[]
         {
             "VPS больше не ломает сайты без IPv6-интернета: если у провайдера нет IPv6, туннель работает только по IPv4. Раньше при включённом VPS не открывались Яндекс, Google и другие сайты с IPv6-адресами, а с категорией «Нейросети» — Claude и ChatGPT.",

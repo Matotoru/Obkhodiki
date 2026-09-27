@@ -17,6 +17,13 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 
+  <!-- Compiled into the exe, so the app stays the same set of files for autostart and self-update. -->
+  <ItemGroup>
+    <Resource Include="Assets\cat.png" />
+    <Resource Include="Assets\Obkhodiki.ico" />
+    <EmbeddedResource Include="Assets\cat.png" LogicalName="Obkhodiki.cat.png" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -26,7 +33,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Obkhodiki</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.4.4</Version>
+    <ApplicationIcon>Assets\Obkhodiki.ico</ApplicationIcon>
+    <Version>0.4.5</Version>
     <!-- Elevated app: DOTNET_STARTUP_HOOKS from the (user-writable) environment must not load code into it. -->
     <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>

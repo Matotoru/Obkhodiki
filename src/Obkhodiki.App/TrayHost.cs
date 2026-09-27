@@ -263,18 +263,27 @@ internal sealed class TrayHost : IDisposable
         _menu.Items.Add("Выход", null, (_, _) => ExitRequested?.Invoke());
     }
 
+    // The mascot with a status dot in the corner.
     private static Icon MakeIcon(Color color)
     {
         using var bmp = new Bitmap(32, 32);
         using (var g = Graphics.FromImage(bmp))
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.Clear(Color.Transparent);
+            using (var stream = typeof(TrayHost).Assembly.GetManifestResourceStream("Obkhodiki.cat.png"))
+            {
+                if (stream is not null)
+                {
+                    using var cat = Image.FromStream(stream);
+                    g.DrawImage(cat, 0, 0, 32, 32);
+                }
+            }
+            using var ring = new SolidBrush(Color.White);
+            g.FillEllipse(ring, 17, 17, 15, 15);
             using var brush = new SolidBrush(color);
-            g.FillEllipse(brush, 2, 2, 28, 28);
-            using var pen = new Pen(Color.White, 3);
-            g.DrawArc(pen, 9, 9, 14, 14, 300, 300);
-            g.DrawLine(pen, 16, 6, 16, 16);
+            g.FillEllipse(brush, 19, 19, 11, 11);
         }
         var handle = bmp.GetHicon();
         try

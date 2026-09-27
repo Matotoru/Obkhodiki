@@ -7,6 +7,7 @@
   Title="Obkhodiki"
   Width="1120"
   Height="740"
+  Icon="pack://application:,,,/Obkhodiki;component/Assets/Obkhodiki.ico"
   MinWidth="860"
   MinHeight="560"
   ExtendsContentIntoTitleBar="True"
@@ -19,6 +20,18 @@
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
+
+    <!-- Faint mascot behind the pages. -->
+    <Image
+      Grid.Row="1"
+      Width="420"
+      Margin="0,0,-40,-60"
+      HorizontalAlignment="Right"
+      VerticalAlignment="Bottom"
+      IsHitTestVisible="False"
+      Opacity="0.07"
+      RenderOptions.BitmapScalingMode="HighQuality"
+      Source="pack://application:,,,/Obkhodiki;component/Assets/cat.png" />
 
     <ui:NavigationView
       x:Name="RootNavigation"
@@ -75,7 +88,11 @@
       </ui:NavigationView.FooterMenuItems>
     </ui:NavigationView>
 
-    <ui:TitleBar x:Name="AppTitleBar" Grid.Row="0" Title="Obkhodiki" />
+    <ui:TitleBar x:Name="AppTitleBar" Grid.Row="0" Title="Obkhodiki">
+      <ui:TitleBar.Icon>
+        <ui:ImageIcon Source="pack://application:,,,/Obkhodiki;component/Assets/cat.png" />
+      </ui:TitleBar.Icon>
+    </ui:TitleBar>
 
     <!-- Notifications from any page land here, so an error is visible wherever the user is. -->
     <ui:SnackbarPresenter x:Name="Snackbars" Grid.Row="1" VerticalAlignment="Bottom" Margin="240,0,24,16" />
