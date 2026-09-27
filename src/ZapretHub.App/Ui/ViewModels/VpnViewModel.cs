@@ -78,6 +78,7 @@ public sealed partial class VpnViewModel : ObservableObject
     public IReadOnlyList<CategoryOption> ProxyCategories { get; }
     public IReadOnlyList<CategoryOption> DirectCategories { get; }
 
+    [ObservableProperty] private bool _vpnEnabled = true;
     [ObservableProperty] private bool _fullTunnel;
     [ObservableProperty] private bool _autoBest = true;
     [ObservableProperty] private bool _isSubscription;
@@ -120,6 +121,12 @@ public sealed partial class VpnViewModel : ObservableObject
         ProxyCategories = RuleCatalog.Proxy.Select(c => new CategoryOption(c, () => ListsDirty = true)).ToList();
         DirectCategories = RuleCatalog.Direct.Select(c => new CategoryOption(c, () => ListsDirty = true)).ToList();
         Servers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ManyServers));
+    }
+
+    partial void OnVpnEnabledChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetVpnEnabledAsync(value));
     }
 
     partial void OnFullTunnelChanged(bool value)
@@ -225,6 +232,7 @@ public sealed partial class VpnViewModel : ObservableObject
         // While an operation runs the switch shows what the user asked for; the result arrives with the next refresh.
         if (!IsBusy)
         {
+            VpnEnabled = c.Settings.VpnEnabled;
             FullTunnel = c.Settings.VpnFullTunnel;
             AutoBest = c.Settings.VpnAutoBest;
         }

@@ -24,6 +24,7 @@ public sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _hasVpn;
     [ObservableProperty] private bool _vpnFull;
+    [ObservableProperty] private bool _vpnEnabled = true;
 
     public bool CanToggle => EngineReady && !IsBusy;
 
@@ -41,6 +42,12 @@ public sealed partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusSubtitle));
         if (_syncing) return;
         _ = _shell.RunAsync(c => value ? c.EnableAsync() : c.DisableAsync());
+    }
+
+    partial void OnVpnEnabledChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetVpnEnabledAsync(value));
     }
 
     partial void OnVpnFullChanged(bool value)
@@ -82,10 +89,15 @@ public sealed partial class HomeViewModel : ObservableObject
 
             VpnOn = c.IsVpnRunning;
             HasVpn = c.VpnServerName is not null;
-            if (!IsBusy) VpnFull = c.Settings.VpnFullTunnel;
+            if (!IsBusy)
+            {
+                VpnFull = c.Settings.VpnFullTunnel;
+                VpnEnabled = c.Settings.VpnEnabled;
+            }
             var server = c.VpnServers.FirstOrDefault(s => s.Tag == c.ActiveServerTag)?.Server;
             var serverName = server is null ? "" : " · " + (server.Name ?? server.Host);
             VpnSummary = c.VpnServerName is null ? "Сервер не добавлен"
+                : !VpnEnabled ? "Выключен"
                 : VpnFull ? "Весь трафик" + serverName
                 : VpnOn ? "Выборочно" + serverName
                 : "Готов, сейчас не нужен";

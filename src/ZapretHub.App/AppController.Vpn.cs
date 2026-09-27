@@ -210,7 +210,10 @@ internal sealed partial class AppController
     public Task SetVpnFullTunnelAsync(bool on) => Serialized(on ? "Включение VPS…" : "Выключение VPS…", silentErrors: false, async () =>
     {
         if (_servers.Count == 0) throw new InvalidOperationException("Сначала добавьте сервер или подписку на странице «VPS».");
+        var (wasFull, wasEnabled) = (Settings.VpnFullTunnel, Settings.VpnEnabled);
         Settings.VpnFullTunnel = on;
+        // Asking for the whole connection through the VPS implies the VPS is on.
+        if (on) Settings.VpnEnabled = true;
         _settingsStore.Save(Settings);
         try
         {
@@ -220,10 +223,30 @@ internal sealed partial class AppController
         catch
         {
             // The switch must not claim a mode that failed to start.
-            Settings.VpnFullTunnel = !on;
+            (Settings.VpnFullTunnel, Settings.VpnEnabled) = (wasFull, wasEnabled);
             _settingsStore.Save(Settings);
             throw;
         }
+    });
+
+    /// <summary>Master switch: off stops sing-box completely and keeps every VPS setting.</summary>
+    public Task SetVpnEnabledAsync(bool on) => Serialized(on ? "Включение VPS…" : "Выключение VPS…", silentErrors: false, async () =>
+    {
+        Settings.VpnEnabled = on;
+        _settingsStore.Save(Settings);
+        if (!on)
+        {
+            _autoPingCts?.Cancel();
+            // Auto games measured through the VPS go direct now; the next game start decides again.
+            lock (_autoGate)
+            {
+                _autoVpn.Clear();
+                _autoDirect.Clear();
+                _autoRunning.Clear();
+            }
+        }
+        await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+        Log.Info(on ? "VPS turned on" : "VPS turned off: sing-box stopped");
     });
 
     public Task SetGameRouteAsync(string id, GameRoute route) => Serialized("Настройка маршрута…", silentErrors: false, async () =>
@@ -269,7 +292,7 @@ internal sealed partial class AppController
         ReloadSource();
         var plan = CurrentPlan();
 
-        if (_source is null || _servers.Count == 0 || (!plan.NeedsTunnel && !needProbe))
+        if (_source is null || _servers.Count == 0 || !Settings.VpnEnabled || (!plan.NeedsTunnel && !needProbe))
         {
             if (IsVpnRunning) await Task.Run(SingBox.Stop);
             _autoPingCts?.Cancel();
@@ -594,6 +617,7 @@ internal sealed partial class AppController
         await Serialized("Замер качества канала…", silentErrors: !interactive, async () =>
         {
             if (_servers.Count == 0) throw new InvalidOperationException("Сначала добавьте сервер или подписку VPS.");
+            if (!Settings.VpnEnabled) throw new InvalidOperationException("VPS выключен: включите его, чтобы измерить путь через сервер.");
             try
             {
                 // Make sure the probe port exists (starts sing-box without the tunnel if nothing else needs it).
@@ -688,10 +712,11 @@ internal sealed partial class AppController
         lock (_autoGate) wasVpn = _autoVpn.Contains(exe);
 
         var endpoints = profile.ProbeEndpoints.Where(IsMeasurable).Select(IPEndPoint.Parse).Take(MaxEndpointsPerMeasurement).ToList();
-        if (endpoints.Count == 0 || _servers.Count == 0 || _sbStore.ActiveMain is null)
+        if (endpoints.Count == 0 || _servers.Count == 0 || _sbStore.ActiveMain is null || !Settings.VpnEnabled)
         {
             Notify?.Invoke(profile.Name, endpoints.Count == 0
                 ? "Напрямую: нет адресов для замера (выполните «Дообучить»)."
+                : !Settings.VpnEnabled ? "Напрямую: VPS выключен."
                 : "Напрямую: VPS не настроен.", ToolTipIcon.Info);
             lock (_autoGate)
             {

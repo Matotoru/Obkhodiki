@@ -191,6 +191,7 @@ internal sealed partial class AppController
         await Serialized("Проверка серверов…", silentErrors: false, async () =>
         {
             if (_servers.Count == 0) throw new InvalidOperationException("Сначала добавьте сервер или подписку.");
+            if (!Settings.VpnEnabled) throw new InvalidOperationException("VPS выключен: включите его, чтобы проверить серверы.");
             _autoPingCts?.Cancel();
             try
             {

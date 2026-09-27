@@ -35,6 +35,12 @@ public sealed class AppSettings
     /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
     public List<string> VpnDomains { get; set; } = new();
 
+    /// <summary>
+    /// Master switch. Off: sing-box never runs (no tunnel, no measurements, Auto games go direct), but every
+    /// VPS setting (mode, categories, programs, servers) is kept for when it is turned back on.
+    /// </summary>
+    public bool VpnEnabled { get; set; } = true;
+
     /// <summary>"Включить VPS": everything goes through the VPS except <see cref="VpnDirectCategories"/> and direct games.</summary>
     public bool VpnFullTunnel { get; set; }
 

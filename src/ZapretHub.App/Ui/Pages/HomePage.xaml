@@ -32,18 +32,27 @@
       </ui:Card>
 
       <!-- The second main switch: the whole connection through the VPS. -->
-      <ui:CardControl Margin="0,0,0,12" Visibility="{Binding HasVpn, Converter={StaticResource BoolToVisibility}}">
-        <ui:CardControl.Icon>
-          <ui:SymbolIcon Symbol="Globe24" />
-        </ui:CardControl.Icon>
-        <ui:CardControl.Header>
-          <StackPanel>
-            <TextBlock FontWeight="SemiBold" Text="VPS: весь трафик" />
-            <TextBlock Style="{StaticResource Caption}" Text="Всё через ваш сервер, кроме российских сайтов и игр с прямым маршрутом" />
-          </StackPanel>
-        </ui:CardControl.Header>
-        <ui:ToggleSwitch IsChecked="{Binding VpnFull}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
-      </ui:CardControl>
+      <ui:Card Margin="0,0,0,12" Padding="16,12" Visibility="{Binding HasVpn, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <DockPanel>
+            <ui:ToggleSwitch DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="{Binding VpnEnabled}" OffContent="Выкл" OnContent="Вкл"
+                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+            <ui:SymbolIcon DockPanel.Dock="Left" Symbol="Globe24" FontSize="22" Margin="4,0,16,0" VerticalAlignment="Center" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock FontWeight="SemiBold" Text="VPS" />
+              <TextBlock Style="{StaticResource Caption}" Text="Выключено — sing-box остановлен, весь трафик идёт напрямую через zapret. Настройки сохраняются." />
+            </StackPanel>
+          </DockPanel>
+          <DockPanel Margin="42,10,0,0" Visibility="{Binding VpnEnabled, Converter={StaticResource BoolToVisibility}}">
+            <ui:ToggleSwitch DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="{Binding VpnFull}" OffContent="Выкл" OnContent="Вкл"
+                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="Весь трафик через VPS" />
+              <TextBlock Style="{StaticResource Caption}" Text="Кроме российских сайтов и игр с прямым маршрутом. Выключено — только выбранное на странице VPS." />
+            </StackPanel>
+          </DockPanel>
+        </StackPanel>
+      </ui:Card>
 
       <!-- Modules at a glance. -->
       <UniformGrid Columns="3" Margin="-6,0,-6,0">

@@ -155,6 +155,7 @@ public class VpnModelTests
             Assert.Null(s.VpnSelectedServer);
             Assert.True(s.VpnFullTunnel);
             Assert.True(s.VpnAutoBest);
+            Assert.True(s.VpnEnabled); // absent in older settings files: the VPS stays on as before
         }
         finally
         {

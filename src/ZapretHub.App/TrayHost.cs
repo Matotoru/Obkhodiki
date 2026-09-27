@@ -180,10 +180,15 @@ internal sealed class TrayHost : IDisposable
         });
         if (_controller.VpnServerName is not null)
         {
+            var enabled = _controller.Settings.VpnEnabled;
             var full = _controller.Settings.VpnFullTunnel;
+            _menu.Items.Add(new Forms.ToolStripMenuItem(enabled ? "Выключить VPS" : "Включить VPS", null, async (_, _) => await _controller.SetVpnEnabledAsync(!enabled))
+            {
+                Enabled = _controller.BusyText is null,
+            });
             _menu.Items.Add(new Forms.ToolStripMenuItem("VPS: весь трафик", null, async (_, _) => await _controller.SetVpnFullTunnelAsync(!full))
             {
-                Checked = full,
+                Checked = enabled && full,
                 Enabled = _controller.BusyText is null,
             });
         }

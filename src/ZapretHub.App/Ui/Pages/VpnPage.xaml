@@ -101,8 +101,24 @@
         </StackPanel>
       </ui:Card>
 
-      <!-- Main switch. -->
+      <!-- Master switch: stops sing-box completely, settings stay. -->
       <ui:CardControl Margin="{StaticResource CardSpacing}" Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="Power24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="VPS" />
+            <TextBlock Style="{StaticResource Caption}"
+                       Text="Выключено — sing-box полностью остановлен, весь трафик идёт напрямую через zapret. Все настройки ниже сохраняются." />
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ui:ToggleSwitch IsChecked="{Binding VpnEnabled}" OffContent="Выкл" OnContent="Вкл" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+      </ui:CardControl>
+
+      <!-- Mode switch. -->
+      <ui:CardControl Margin="{StaticResource CardSpacing}" Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}"
+                      IsEnabled="{Binding VpnEnabled}">
         <ui:CardControl.Icon>
           <ui:SymbolIcon Symbol="Globe24" />
         </ui:CardControl.Icon>
