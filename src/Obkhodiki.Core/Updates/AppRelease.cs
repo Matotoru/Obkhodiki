@@ -56,6 +56,11 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.5.0", new[]
+        {
+            "Программа переехала на .NET 10 и теперь одна: .NET встроен внутрь, отдельно ничего ставить не нужно. Поддержка .NET 8, на котором она работала раньше, заканчивается 10 ноября 2026 года.",
+            "Файлы прежней версии в папке программы убираются сами после успешного обновления.",
+        }),
         new Entry("0.4.7", new[]
         {
             "Hysteria2 с прыжками по портам (port hopping): ссылки вида host:443,20000-30000 и с параметром mport теперь принимаются — блокировка одного порта больше не обрывает VPS.",

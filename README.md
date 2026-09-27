@@ -2,6 +2,8 @@
 
 Приложение для Windows (окно в стиле Windows 11 и значок в трее) поверх [zapret](https://github.com/bol-van/zapret) (`winws.exe`) со стратегиями [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube).
 
+Нужна 64-битная Windows 10 или 11. Устанавливать .NET не нужно: он уже внутри программы. Скачайте архив из [релизов](https://github.com/Matotoru/Obkhodiki/releases), распакуйте и запустите `Obkhodiki.exe`.
+
 ## Что умеет
 
 **Обход блокировок**
@@ -21,7 +23,7 @@
 - Кнопка «Подключить Telegram к прокси» открывает ссылку `tg://proxy`, и Telegram добавляет прокси сам.
 
 **VPS (страница «VPS»)**
-- Подписка (например, из панели 3x-ui) или ссылка одного сервера: VLESS (TLS, Reality, ws, gRPC, httpupgrade, HTTP/2), Hysteria2, Trojan, Shadowsocks. Работает через [sing-box](https://github.com/SagerNet/sing-box). XHTTP и VMess пока не поддерживаются.
+- Подписка (например, из панели 3x-ui) или ссылка одного сервера: VLESS (TLS, Reality, ws, gRPC, httpupgrade, HTTP/2), Hysteria2 (в том числе с прыжками по портам), Trojan, Shadowsocks. Можно сохранить несколько подписок и переключаться между ними. Работает через [sing-box](https://github.com/SagerNet/sing-box). XHTTP и VMess пока не поддерживаются.
 - Подписка обновляется сама по интервалу, который задаёт панель (по умолчанию раз в 12 часов). Показываются трафик и срок действия.
 - Ссылка подписки и серверы хранятся зашифрованными (DPAPI текущего пользователя) в папке, доступной только администраторам.
 - Главный выключатель VPS (на главной, на странице VPS и в трее) полностью останавливает sing-box; все настройки VPS при этом сохраняются.

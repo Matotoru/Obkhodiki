@@ -22,7 +22,7 @@ jobs:
 
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Check tag
         id: version
@@ -42,13 +42,29 @@ jobs:
         run: dotnet test tests/Obkhodiki.Core.Tests -c Release
 
       - name: Publish
-        run: dotnet publish src/Obkhodiki.App -c Release -r win-x64 --self-contained false -p:DebugType=none -o out
+        # One self-contained file: users need no .NET installed. WPF's native DLLs stay next to it (not unpacked to
+        # %TEMP%, where an elevated process must not load code from).
+        run: >
+          dotnet publish src/Obkhodiki.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o out
 
       - name: Zip
         shell: pwsh
         run: |
           Copy-Item THIRD-PARTY-NOTICES.md, LICENSE out/
+          # Updaters of 0.4.x require the file list of the old framework-dependent build; placeholders let them
+          # accept this archive. The new app ignores and removes them (Autostart.LegacyAppFiles).
+          $legacy = "Obkhodiki.dll", "Obkhodiki.Core.dll", "Obkhodiki.deps.json", "Obkhodiki.runtimeconfig.json",
+            "System.ServiceProcess.ServiceController.dll", "System.Diagnostics.EventLog.dll", "Wpf.Ui.dll",
+            "Wpf.Ui.Abstractions.dll", "CommunityToolkit.Mvvm.dll"
+          foreach ($f in $legacy) {
+            if (Test-Path "out/$f") { throw "$f is a real build output, not a placeholder" }
+            Set-Content -Path "out/$f" -Value "placeholder for Obkhodiki 0.4.x updaters" -NoNewline
+          }
           Compress-Archive -Path out/* -DestinationPath "Obkhodiki-${{ steps.version.outputs.version }}-win-x64.zip"
+          # The app refuses downloads over 100 MB (AppReleaseClient.MaxDownloadBytes).
+          $size = (Get-Item "Obkhodiki-${{ steps.version.outputs.version }}-win-x64.zip").Length
+          if ($size -gt 95MB) { throw "Release archive is $([math]::Round($size / 1MB)) MB, too close to the 100 MB limit" }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -65,6 +65,16 @@ public static partial class UpdatePackage
         if (missing.Count > 0) throw new InvalidDataException("В архиве обновления нет файлов: " + string.Join(", ", missing));
     }
 
+    /// <summary>Deletes every top-level file of <paramref name="dir"/> whose name is not in <paramref name="keep"/>.</summary>
+    public static void KeepOnly(string dir, IEnumerable<string> keep)
+    {
+        var names = new HashSet<string>(keep, StringComparer.OrdinalIgnoreCase);
+        foreach (var path in Directory.GetFiles(dir))
+        {
+            if (!names.Contains(Path.GetFileName(path))) File.Delete(path);
+        }
+    }
+
     /// <summary>What <see cref="Swap"/> did, to undo it.</summary>
     public sealed record SwapResult(IReadOnlyList<string> Replaced, IReadOnlyList<string> Added);
 

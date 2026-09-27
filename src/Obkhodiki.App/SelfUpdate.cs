@@ -31,7 +31,9 @@ internal static class SelfUpdate
         var dir = Path.Combine(UpdateRoot, ReleaseVersion.Normalize(version));
         try
         {
-            UpdatePackage.Extract(zip, dir, Autostart.AppFiles.Where(f => !f.Contains('\\')), AppReleaseClient.MaxDownloadBytes);
+            UpdatePackage.Extract(zip, dir, Autostart.AppFiles, AppReleaseClient.MaxDownloadBytes);
+            // Placeholders for older updaters (see Autostart.LegacyAppFiles) and anything else unknown stay out.
+            UpdatePackage.KeepOnly(dir, Autostart.AppFiles);
         }
         catch (InvalidDataException ex)
         {
@@ -147,6 +149,13 @@ internal static class SelfUpdate
             try
             {
                 Directory.CreateDirectory(target);
+                // A 0.4.x updater unpacked the placeholders for its own checks too; they must not replace the
+                // old version's real files, which a rollback may still need.
+                if (string.Equals(source.TrimEnd('\\'), target.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("Обновление запущено из папки установки.");
+                }
+                UpdatePackage.KeepOnly(source, Autostart.AppFiles);
                 swap = UpdatePackage.Swap(source, target, BackupDir, CopyWithRetry);
             }
             finally
@@ -159,6 +168,7 @@ internal static class SelfUpdate
             if (StartAndWaitHealthy(target))
             {
                 Directory.Delete(BackupDir, recursive: true);
+                RemoveLegacyFiles(target);
                 TryCreateStartMenuShortcut(target);
                 Log.Info($"Update to {CurrentVersion} finished");
                 return 0;
@@ -185,6 +195,38 @@ internal static class SelfUpdate
             if (File.Exists(Path.Combine(target, "Obkhodiki.exe"))) Start(target, null);
             else Fail("Обновление не удалось: " + ex.Message);
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// After the first update to a single-file build the old framework-dependent files are left over. Removed only
+    /// once the new version has started, so a rollback still has them.
+    /// </summary>
+    private static void RemoveLegacyFiles(string target)
+    {
+        foreach (var name in Autostart.LegacyAppFiles)
+        {
+            try
+            {
+                var path = Path.Combine(target, name);
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error($"Old file {name} could not be removed", ex);
+            }
+        }
+        try
+        {
+            var runtimes = Path.Combine(target, "runtimes");
+            if (Directory.Exists(runtimes) && !File.GetAttributes(runtimes).HasFlag(FileAttributes.ReparsePoint))
+            {
+                Directory.Delete(runtimes, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Old runtimes folder could not be removed", ex);
         }
     }
 

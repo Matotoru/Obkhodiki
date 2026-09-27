@@ -142,9 +142,25 @@ internal static class Autostart
 
     // Only the app's own files: anything else lying next to the exe (e.g. in Downloads) must not be
     // promoted into the trusted, elevated-at-logon location.
+    // Since 0.5.0 the app is one self-contained file with .NET inside. WPF's native libraries stay next to it on
+    // purpose: bundled, they would be unpacked into the user-writable %TEMP% and loaded from there by an elevated
+    // process.
     internal static readonly string[] AppFiles =
     {
         "Obkhodiki.exe",
+        "D3DCompiler_47_cor3.dll",
+        "PenImc_cor3.dll",
+        "PresentationNative_cor3.dll",
+        "vcruntime140_cor3.dll",
+        "wpfgfx_cor3.dll",
+    };
+
+    /// <summary>
+    /// Files of the framework-dependent builds up to 0.4.x. Release archives still carry placeholders with these
+    /// names so that 0.4.x updaters, which require them, accept the archive; they are dropped on install.
+    /// </summary>
+    internal static readonly string[] LegacyAppFiles =
+    {
         "Obkhodiki.dll",
         "Obkhodiki.Core.dll",
         "Obkhodiki.deps.json",
@@ -154,13 +170,6 @@ internal static class Autostart
         "Wpf.Ui.dll",
         "Wpf.Ui.Abstractions.dll",
         "CommunityToolkit.Mvvm.dll",
-    };
-
-    // Present in a plain build output; a RID-specific publish flattens them into the root.
-    internal static readonly string[] OptionalAppFiles =
-    {
-        @"runtimes\win\lib\net8.0\System.ServiceProcess.ServiceController.dll",
-        @"runtimes\win\lib\net8.0\System.Diagnostics.EventLog.dll",
     };
 
     private static bool InstallCopy()
@@ -177,7 +186,7 @@ internal static class Autostart
 
         // Start from an empty folder so nothing stale or planted survives.
         if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
-        foreach (var file in AppFiles.Concat(OptionalAppFiles.Where(f => File.Exists(Path.Combine(source, f)))))
+        foreach (var file in AppFiles)
         {
             var dest = Path.Combine(target, file);
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);

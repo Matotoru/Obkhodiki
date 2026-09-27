@@ -55,6 +55,8 @@ public abstract partial class GitHubReleaseSource
 
     public async Task<ReleaseInfo> GetLatestAsync(CancellationToken ct)
     {
+        // HttpClient (since .NET 10) no longer checks an already-cancelled token before calling the handler.
+        ct.ThrowIfCancellationRequested();
         string json;
         try
         {

@@ -27,6 +27,23 @@ public sealed class UpdatePackageTests : IDisposable
         return ms;
     }
 
+    // A 0.5 archive: the single-file app, WPF's native libraries and placeholders that 0.4.x updaters require.
+    [Fact]
+    public void Extract_SingleFileWithLegacyPlaceholders_KeepOnlyLeavesTheApp()
+    {
+        var dir = Path.Combine(_root, "new");
+        var app = new[] { "Obkhodiki.exe", "wpfgfx_cor3.dll" };
+        var legacy = new[] { "Obkhodiki.dll", "Obkhodiki.deps.json", "Wpf.Ui.dll" };
+        using var zip = Zip(app.Concat(legacy).Append("LICENSE").Select(n => (n, "x")).ToArray());
+
+        // What a 0.4.x updater checks: its old file list is there.
+        UpdatePackage.Extract(zip, dir, legacy, 1024);
+        UpdatePackage.KeepOnly(dir, app);
+
+        Assert.Equal(app.Order(StringComparer.OrdinalIgnoreCase),
+            Directory.GetFiles(dir).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData("Obkhodiki.exe", true)]
     [InlineData("Wpf.Ui.Abstractions.dll", true)]
