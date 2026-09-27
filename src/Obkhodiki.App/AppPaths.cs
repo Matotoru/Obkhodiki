@@ -33,6 +33,7 @@ internal static class AppPaths
     public static readonly string SingBoxRoot = Path.Combine(VpnRoot, "engine");
     public static readonly string VpnConfig = Path.Combine(VpnRoot, "config.json");
     public static readonly string VpnServerFile = Path.Combine(VpnRoot, "server.bin");
+    public static readonly string VpnSavedFile = Path.Combine(VpnRoot, "saved.bin");
     public static readonly string SingBoxLog = Path.Combine(VpnRoot, "sing-box.log");
     public static readonly string RuleSetsDir = Path.Combine(VpnRoot, "rules");
 

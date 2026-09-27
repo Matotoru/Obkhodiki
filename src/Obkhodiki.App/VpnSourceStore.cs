@@ -28,7 +28,13 @@ internal sealed class VpnSource
     public double UpdateHours { get; set; } = 12;
     public int SkippedCount { get; set; }
 
+    /// <summary>Server chosen by the user in this source, kept while the source is not the active one.</summary>
+    public string? SelectedServer { get; set; }
+
     public bool IsSubscription => SubscriptionUrl is not null;
+
+    /// <summary>The same subscription or server added twice is one source.</summary>
+    public string Key => SubscriptionUrl ?? Link ?? "";
 
     private (string? Link, List<string> Links, bool Insecure, IReadOnlyList<VpnServerEntry> Servers)? _cache;
 
@@ -90,12 +96,43 @@ internal static class VpnSourceStore
 
     public static void Save(VpnSource source)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.VpnServerFile)!);
-        var data = ProtectedData.Protect(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(source)), Entropy, DataProtectionScope.CurrentUser);
-        var tmp = AppPaths.VpnServerFile + ".tmp";
-        File.WriteAllBytes(tmp, data);
-        File.Move(tmp, AppPaths.VpnServerFile, overwrite: true);
+        Write(AppPaths.VpnServerFile, JsonSerializer.Serialize(source));
         Log.Info($"VPS source saved: {source.Describe()}");
+    }
+
+    /// <summary>Sources the user used before and can switch back to (not the active one).</summary>
+    public static List<VpnSource> LoadSaved()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.VpnSavedFile)) return new();
+            var text = Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(AppPaths.VpnSavedFile), Entropy, DataProtectionScope.CurrentUser));
+            return JsonSerializer.Deserialize<List<VpnSource>>(text) ?? new();
+        }
+        catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            Log.Error("Saved VPS sources are unreadable", ex);
+            return new();
+        }
+    }
+
+    public static void SaveSaved(IReadOnlyList<VpnSource> sources)
+    {
+        if (sources.Count == 0)
+        {
+            if (File.Exists(AppPaths.VpnSavedFile)) File.Delete(AppPaths.VpnSavedFile);
+            return;
+        }
+        Write(AppPaths.VpnSavedFile, JsonSerializer.Serialize(sources));
+    }
+
+    private static void Write(string path, string json)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var data = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), Entropy, DataProtectionScope.CurrentUser);
+        var tmp = path + ".tmp";
+        File.WriteAllBytes(tmp, data);
+        File.Move(tmp, path, overwrite: true);
     }
 
     public static VpnSource? Load()

@@ -115,7 +115,11 @@ internal sealed partial class AppController
         _gameWatch.Start();
     }
 
-    private void ReloadSource() => UseSource(VpnSourceStore.Load());
+    private void ReloadSource()
+    {
+        UseSource(VpnSourceStore.Load());
+        UseSaved(VpnSourceStore.LoadSaved());
+    }
 
     private void UseSource(VpnSource? source)
     {
@@ -162,10 +166,7 @@ internal sealed partial class AppController
         string? error = "Не удалось применить настройки, подробности в уведомлении.";
         await Serialized(busyText, silentErrors: false, async () =>
         {
-            VpnSourceStore.Save(source);
-            UseSource(source);
-            _appliedSignature = null; // force a restart with the new servers
-            _pings.Clear();
+            Activate(source);
             // Adding a server is the moment to fetch sing-box (with confirmation), not later in the background.
             if (_sbStore.ActiveMain is null && !await InstallFirstSingBoxAsync())
             {

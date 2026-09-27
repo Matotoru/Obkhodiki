@@ -75,6 +75,8 @@ public sealed partial class VpnViewModel : ObservableObject
     public ObservableCollection<QualityTarget> Targets { get; } = new();
 
     public ObservableCollection<ServerRowViewModel> Servers { get; } = new();
+    public ObservableCollection<SavedVpnSourceView> SavedSources { get; } = new();
+    public bool HasSaved => SavedSources.Count > 0;
     public IReadOnlyList<CategoryOption> ProxyCategories { get; }
     public IReadOnlyList<CategoryOption> DirectCategories { get; }
 
@@ -130,6 +132,7 @@ public sealed partial class VpnViewModel : ObservableObject
             _ = _shell.RunAsync(c => c.SetVpnCategoriesAsync(proxy, direct));
         };
         Servers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ManyServers));
+        SavedSources.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSaved));
     }
 
     partial void OnVpnEnabledChanged(bool value)
@@ -180,6 +183,12 @@ public sealed partial class VpnViewModel : ObservableObject
             if (info.FetchedAt is { } at) parts.Add($"обновлена {at.ToLocalTime():dd.MM HH:mm}");
             if (info.Skipped > 0) parts.Add($"пропущено {info.Skipped}");
             SourceDetails = string.Join(" · ", parts);
+        }
+
+        if (!c.SavedVpnSources.SequenceEqual(SavedSources))
+        {
+            SavedSources.Clear();
+            foreach (var s in c.SavedVpnSources) SavedSources.Add(s);
         }
 
         var servers = c.VpnServers;
@@ -351,8 +360,22 @@ public sealed partial class VpnViewModel : ObservableObject
     [RelayCommand]
     private async Task RemoveServerAsync()
     {
-        if (!await UiDialogs.ConfirmAsync("Удалить сервер", "Удалить сервер VPS? Все маршруты через VPS перестанут работать.", "Удалить")) return;
+        var text = HasSaved
+            ? "Удалить текущую подписку или сервер? Сохранённые останутся, на них можно будет переключиться."
+            : "Удалить сервер VPS? Все маршруты через VPS перестанут работать.";
+        if (!await UiDialogs.ConfirmAsync("Удалить", text, "Удалить")) return;
         await _shell.RunAsync(c => c.RemoveVpnServerAsync());
+    }
+
+    [RelayCommand]
+    private Task SwitchSource(string id) => _shell.RunAsync(c => c.SwitchVpnSourceAsync(id));
+
+    [RelayCommand]
+    private async Task DeleteSavedAsync(string id)
+    {
+        var title = SavedSources.FirstOrDefault(s => s.Id == id)?.Title;
+        if (!await UiDialogs.ConfirmAsync("Удалить", $"Удалить «{title}» из сохранённых?", "Удалить")) return;
+        await _shell.RunAsync(c => c.DeleteSavedVpnSourceAsync(id));
     }
 
     // ---------- programs and sites ----------
@@ -520,6 +543,8 @@ public sealed partial class VpnViewModel : ObservableObject
         foreach (var o in DirectCategories) { o.Syncing = true; o.IsChecked = true; o.Syncing = false; }
         foreach (var o in ProxyCategories.Take(2)) { o.Syncing = true; o.IsChecked = true; o.Syncing = false; }
         ServerName = "Мой 3x-ui · 3 сервера";
+        SavedSources.Add(new SavedVpnSourceView("a", "BuzzVPN · 12 серверов", "Подписка · до 15.11.2026 · обновлена 26.09 20:41"));
+        SavedSources.Add(new SavedVpnSourceView("b", "Hysteria2 · fr2.example.com:443", "Один сервер"));
         IsRunning = true;
         SingBoxVersion = "1.14.2";
         foreach (var p in new[] { "chrome.exe", "Spotify.exe" }) Programs.Add(p);

@@ -80,7 +80,7 @@
         <StackPanel Orientation="Horizontal">
           <ui:Button Content="Обновить" Command="{Binding RefreshSubscriptionCommand}" Margin="0,0,8,0" Icon="{ui:SymbolIcon ArrowSync24}"
                      Visibility="{Binding IsSubscription, Converter={StaticResource BoolToVisibility}}" />
-          <ui:Button Content="Заменить" Command="{Binding EditServerCommand}" Margin="0,0,8,0" />
+          <ui:Button Content="Добавить другую" Command="{Binding EditServerCommand}" Margin="0,0,8,0" Icon="{ui:SymbolIcon Add24}" />
           <ui:Button Content="Удалить" Command="{Binding RemoveServerCommand}" />
         </StackPanel>
       </ui:CardControl>
@@ -90,6 +90,8 @@
           <TextBlock FontSize="16" FontWeight="SemiBold" Text="Подписка или сервер" />
           <TextBlock Margin="0,4,0,12" Style="{StaticResource Caption}"
                      Text="Вставьте ссылку подписки из 3x-ui (https://…/sub/…) или ссылку одного сервера: vless://, hysteria2://, trojan://, ss://. Она хранится зашифрованной в папке, доступной только администраторам." />
+          <TextBlock Margin="0,0,0,12" Style="{StaticResource Caption}" Text="Текущая подписка не удалится: она останется в «Сохранённых», и на неё можно будет переключиться."
+                     Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}" />
           <ui:PasswordBox PlaceholderText="https://…/sub/…  или  vless://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
           <TextBlock Margin="0,8,0,0" Foreground="#FF99A4" TextWrapping="Wrap" Text="{Binding ServerError}"
                      Visibility="{Binding ServerError, Converter={StaticResource NullToVisibility}}" />
@@ -100,6 +102,43 @@
           </StackPanel>
         </StackPanel>
       </ui:Card>
+
+      <!-- Previously used subscriptions and servers: switch back in one click. -->
+      <ui:CardExpander Margin="{StaticResource CardSpacing}" IsExpanded="True" Visibility="{Binding HasSaved, Converter={StaticResource BoolToVisibility}}">
+        <ui:CardExpander.Icon>
+          <ui:SymbolIcon Symbol="Bookmark24" />
+        </ui:CardExpander.Icon>
+        <ui:CardExpander.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Сохранённые подписки" />
+            <TextBlock Style="{StaticResource Caption}" Text="Раньше подключённые подписки и серверы. Выбранный в них сервер запоминается." />
+          </StackPanel>
+        </ui:CardExpander.Header>
+        <ItemsControl ItemsSource="{Binding SavedSources}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="0,4">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Style="{StaticResource Caption}" Text="{Binding Details}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                  <ui:Button Content="Переключиться" Margin="0,0,8,0"
+                             Command="{Binding DataContext.SwitchSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                             CommandParameter="{Binding Id}" />
+                  <ui:Button Icon="{ui:SymbolIcon Delete24}" ToolTip="Удалить из сохранённых"
+                             Command="{Binding DataContext.DeleteSavedCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                             CommandParameter="{Binding Id}" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ui:CardExpander>
 
       <!-- Master switch: stops sing-box completely, settings stay. -->
       <ui:CardControl Margin="{StaticResource CardSpacing}" Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}">
