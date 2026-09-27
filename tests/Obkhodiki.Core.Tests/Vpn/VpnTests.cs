@@ -129,9 +129,10 @@ public class SingBoxConfigTests
 
         Assert.Equal("127.0.0.1", probe.GetProperty("listen").GetString());
         Assert.Equal("user1", probe.GetProperty("users")[0].GetProperty("username").GetString());
-        var firstRule = root.GetProperty("route").GetProperty("rules")[0];
-        Assert.Equal("probe-in", firstRule.GetProperty("inbound")[0].GetString());
-        Assert.Equal("proxy", firstRule.GetProperty("outbound").GetString());
+        // Probe rules come before everything else: the main user goes through the selected server.
+        var probeRules = root.GetProperty("route").GetProperty("rules").EnumerateArray()
+            .TakeWhile(r => r.TryGetProperty("inbound", out var i) && i[0].GetString() == "probe-in").ToList();
+        Assert.Contains(probeRules, r => r.GetProperty("auth_user")[0].GetString() == "user1" && r.GetProperty("outbound").GetString() == "proxy");
     }
 
     // IPv4-only TUN would let selected programs leak straight out over IPv6.

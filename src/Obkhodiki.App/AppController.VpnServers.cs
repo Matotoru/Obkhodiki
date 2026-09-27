@@ -1,3 +1,4 @@
+using System.Net;
 using System.Windows.Forms;
 using Obkhodiki.Core.Vpn;
 
@@ -24,6 +25,8 @@ internal sealed partial class AppController
     private const int PingSamples = 3;
     private const int PingParallel = 4;
     private static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(4);
+    // Anycast: answered by the Cloudflare node closest to each server, so the result is about the server itself.
+    private static readonly IPEndPoint PingTarget = IPEndPoint.Parse("1.1.1.1:443");
     private const long MaxSubscriptionSize = 2 * 1024 * 1024;
 
     private readonly Dictionary<string, ServerPing> _pings = new();
@@ -233,18 +236,33 @@ internal sealed partial class AppController
         try
         {
             var servers = _servers.ToList();
+            if (_probeAuth is not { } auth) throw new InvalidOperationException("sing-box не запущен.");
+            var port = _probePort;
+            // Exactly one listener, and it is sing-box: the probe password must not reach anyone else.
+            var listeners = NativeProcess.TcpListenerPids(port);
+            if (SingBox.ProcessId is not { } sbPid || listeners.Count != 1 || !listeners.Contains(sbPid))
+            {
+                throw new InvalidOperationException("Порт замера занят другой программой.");
+            }
+
             using var gate = new SemaphoreSlim(PingParallel);
             var tasks = servers.Select(async s =>
             {
                 await gate.WaitAsync(ct);
                 try
                 {
+                    // One round trip through exactly this server to the Cloudflare node nearest to it (a second TLS
+                    // exchange on an open connection), not a whole HTTPS request: that counted 2-3 round trips and
+                    // showed ~88 ms for a server 37 ms away.
+                    var probe = new Socks5TcpProbe(new IPEndPoint(IPAddress.Loopback, port),
+                        new ProbeCredentials(SingBoxConfig.ServerProbeUser(s.Tag), auth.Password));
                     var samples = new List<int?>();
+                    // Warm-up opens the tunnel stream; a server that fails it is down, no need to wait more timeouts.
+                    if (await probe.ConnectAsync(PingTarget, PingTimeout, ct) is null) return ServerPing.From(s.Tag, new int?[] { null });
                     for (var i = 0; i < PingSamples; i++)
                     {
-                        var d = await clash.DelayAsync(s.Tag, PingTimeout, ct);
-                        samples.Add(d);
-                        if (d is null && i == 0) break;
+                        var rtt = await probe.ConnectAsync(PingTarget, PingTimeout, ct);
+                        samples.Add(rtt is { } t ? (int)Math.Round(t.TotalMilliseconds) : null);
                     }
                     return ServerPing.From(s.Tag, samples);
                 }

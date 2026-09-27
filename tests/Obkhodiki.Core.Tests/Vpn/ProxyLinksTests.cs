@@ -367,6 +367,22 @@ public class MultiServerConfigTests
     }
 
     [Fact]
+    public void ProbeUsers_OnePerServer_RoutedToThatServer()
+    {
+        var root = Build(Options());
+        var users = root["inbounds"]!.AsArray().Single(i => (string?)i!["tag"] == "probe-in")!["users"]!.AsArray();
+        Assert.Equal(1 + Servers.Length, users.Count);
+        Assert.All(users, u => Assert.Equal("p", (string?)u!["password"]));
+        var rules = root["route"]!["rules"]!.AsArray();
+        foreach (var s in Servers)
+        {
+            var rule = rules.Single(r => r!["auth_user"] is JsonArray a && (string?)a[0] == SingBoxConfig.ServerProbeUser(s.Tag))!;
+            Assert.Equal(s.Tag, (string?)rule["outbound"]);
+            Assert.Equal("probe-in", (string?)rule["inbound"]![0]);
+        }
+    }
+
+    [Fact]
     public void NoHostIpv6_TunnelIpv4Only_DnsWithoutAaaa()
     {
         var root = Build(Options(full: true) with { HostIpv6 = false });

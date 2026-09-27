@@ -74,6 +74,9 @@ public static partial class SingBoxConfig
     [GeneratedRegex(@"^geo(site|ip)-[a-z0-9-]{1,64}\z")]
     private static partial Regex RuleSetTag();
 
+    /// <summary>Probe-port user that is routed to exactly this server (for per-server pings).</summary>
+    public static string ServerProbeUser(string tag) => "srv-" + tag;
+
     public static bool IsValidProcessName(string name) => ProcessName().IsMatch(name) && Path.GetFileName(name) == name;
 
     /// <summary>Lower-cases and strips "*." / leading dots; null when not a plain domain name.</summary>
@@ -141,7 +144,11 @@ public static partial class SingBoxConfig
             ["tag"] = "probe-in",
             ["listen"] = "127.0.0.1",
             ["listen_port"] = options.ProbePort,
-            ["users"] = new JsonArray(new JsonObject { ["username"] = options.ProbeAuth.User, ["password"] = options.ProbeAuth.Password }),
+            // The main user follows the selected server; one extra user per server reaches exactly that server, so
+            // every server can be pinged without switching the one in use.
+            ["users"] = new JsonArray(new[] { new JsonObject { ["username"] = options.ProbeAuth.User, ["password"] = options.ProbeAuth.Password } }
+                .Concat(servers.Select(s => new JsonObject { ["username"] = ServerProbeUser(s.Tag), ["password"] = options.ProbeAuth.Password }))
+                .Select(u => (JsonNode)u).ToArray()),
         });
 
         var outbounds = new JsonArray();
@@ -158,12 +165,14 @@ public static partial class SingBoxConfig
         });
         outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = "direct" });
 
-        var rules = new JsonArray
+        var rules = new JsonArray();
+        foreach (var s in servers)
         {
-            new JsonObject { ["inbound"] = new JsonArray("probe-in"), ["outbound"] = ProxyTag },
-            // Reads the site name from TLS/QUIC so domain rules match whatever address the app connected to.
-            new JsonObject { ["action"] = "sniff" },
-        };
+            rules.Add(new JsonObject { ["inbound"] = new JsonArray("probe-in"), ["auth_user"] = new JsonArray(ServerProbeUser(s.Tag)), ["outbound"] = s.Tag });
+        }
+        rules.Add(new JsonObject { ["inbound"] = new JsonArray("probe-in"), ["auth_user"] = new JsonArray(options.ProbeAuth.User), ["outbound"] = ProxyTag });
+        // Reads the site name from TLS/QUIC so domain rules match whatever address the app connected to.
+        rules.Add(new JsonObject { ["action"] = "sniff" });
         if (remoteDns) rules.Add(new JsonObject { ["protocol"] = "dns", ["action"] = "hijack-dns" });
 
         if (full)
