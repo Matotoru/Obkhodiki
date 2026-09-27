@@ -300,7 +300,8 @@ public sealed partial class GamesViewModel : ObservableObject
                 UdpPorts = PortSet.Parse(existing?.UdpPorts ?? "").Union(_learned.UdpPorts).ToString(),
                 Route = existing?.Route ?? GameRoute.Direct,
                 ProbeEndpoints = GameProfiles.SanitizeEndpoints(
-                    _learned.TcpEndpoints.Select(e => e.ToString()).Concat(existing?.ProbeEndpoints ?? new List<string>())),
+                    _learned.TcpEndpoints.Select(e => e.ToString()).Concat(existing?.ProbeEndpoints ?? new List<string>()),
+                    _learned.Endpoints.Where(e => e.SeenUdp).Select(e => e.Address)),
             };
             if (await c.SaveGameProfileAsync(profile, IpsetBuilder.Build(_learned.Endpoints, aws)))
             {

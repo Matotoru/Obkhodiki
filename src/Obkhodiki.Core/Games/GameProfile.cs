@@ -91,17 +91,20 @@ public static partial class GameProfiles
 
     public const int MaxProbeEndpoints = 8;
 
-    /// <summary>Keeps well-formed public "ip:port" entries only, de-duplicated and capped.</summary>
-    public static List<string> SanitizeEndpoints(IEnumerable<string>? endpoints) =>
-        (endpoints ?? Enumerable.Empty<string>())
-            .Select(e => System.Net.IPEndPoint.TryParse(e ?? "", out var ep) && ep.Port > 0 && TrafficLearner.IsPublic(ep.Address) ? ep.ToString() : null)
+    /// <summary>
+    /// Keeps well-formed public "ip:port" entries only, de-duplicated, ranked for measuring
+    /// (see <see cref="Vpn.TlsPing.RankForProbe"/>) and capped.
+    /// </summary>
+    public static List<string> SanitizeEndpoints(IEnumerable<string>? endpoints, IEnumerable<System.Net.IPAddress>? gameServers = null)
+    {
+        var parsed = (endpoints ?? Enumerable.Empty<string>())
+            .Select(e => System.Net.IPEndPoint.TryParse(e ?? "", out var ep) && ep.Port > 0 && TrafficLearner.IsPublic(ep.Address) ? ep : null)
             .Where(e => e is not null)
             .Select(e => e!)
-            .Distinct()
-            // Only TLS endpoints can be measured; keep them when capping.
-            .OrderBy(e => Vpn.TlsPing.IsTlsPort(System.Net.IPEndPoint.Parse(e).Port) ? 0 : 1)
-            .Take(MaxProbeEndpoints)
+            .DistinctBy(e => e.ToString())
             .ToList();
+        return Vpn.TlsPing.RankForProbe(parsed, gameServers).Take(MaxProbeEndpoints).Select(e => e.ToString()).ToList();
+    }
 
     private static readonly Dictionary<char, string> Translit = new()
     {

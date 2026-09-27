@@ -655,10 +655,17 @@ internal sealed partial class AppController
 
     // ---------- measuring ----------
 
-    public sealed record QualityResult(PathStats Direct, PathStats Tunnel, PathDecision Decision);
+    /// <param name="Measured">Endpoints that answered and were measured.</param>
+    /// <param name="Silent">Endpoints of the target that do not answer this kind of probe and were left out.</param>
+    public sealed record QualityResult(PathStats Direct, PathStats Tunnel, PathDecision Decision,
+        IReadOnlyList<IPEndPoint> Measured, IReadOnlyList<IPEndPoint> Silent)
+    {
+        public bool OnlyCdn => Measured.Count > 0 && Measured.All(e => TlsPing.IsAnycastCdn(e.Address));
+    }
 
     /// <summary>Only TLS endpoints give a trustworthy round trip on both paths (see TlsPing).</summary>
-    private static bool IsMeasurable(string endpoint) => IPEndPoint.TryParse(endpoint, out var ep) && TlsPing.IsTlsPort(ep.Port);
+    // Any TCP endpoint may speak TLS; the ones that do not are sorted out by a quick check before measuring.
+    private static bool IsMeasurable(string endpoint) => IPEndPoint.TryParse(endpoint, out var ep) && ep.Port > 0;
 
     /// <summary>Measures the direct path and the VPS path to the given TLS endpoints.</summary>
     /// <param name="interactive">Whether this was started by the user (may install sing-box after asking).</param>
@@ -686,10 +693,25 @@ internal sealed partial class AppController
                 var tunnelProbe = new Socks5TcpProbe(new IPEndPoint(IPAddress.Loopback, _probePort), _probeAuth);
                 var timeout = TimeSpan.FromSeconds(3);
                 var pause = TimeSpan.FromMilliseconds(150);
-                var direct = await Task.Run(() => PathMeasurer.MeasureAsync(new DirectTcpProbe(), endpoints, SamplesPerEndpoint, timeout, pause, ct), ct);
-                var tunnel = await Task.Run(() => PathMeasurer.MeasureAsync(tunnelProbe, endpoints, SamplesPerEndpoint, timeout, pause, ct), ct);
-                result = new QualityResult(direct, tunnel, PathChooser.Choose(direct, tunnel));
-                Log.Info($"Path quality to {string.Join(", ", endpoints)}: direct {direct}, VPS {tunnel} => {result.Decision}");
+                var directProbe = new DirectTcpProbe();
+                var ranked = TlsPing.RankForProbe(endpoints);
+                var responsive = await PathMeasurer.SelectResponsiveAsync(directProbe, tunnelProbe, ranked, timeout, ct);
+                var chosen = PathMeasurer.PickForMeasurement(responsive, MaxEndpointsPerMeasurement);
+                if (chosen.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Ни один адрес ({string.Join(", ", endpoints)}) не ответил на замер ни напрямую, ни через VPS. " +
+                        "Запишите игру заново («Дообучить») во время матча или введите другой адрес.");
+                }
+                var directEach = await Task.Run(() => PathMeasurer.MeasureEachAsync(directProbe, chosen, SamplesPerEndpoint, timeout, pause, ct), ct);
+                var tunnelEach = await Task.Run(() => PathMeasurer.MeasureEachAsync(tunnelProbe, chosen, SamplesPerEndpoint, timeout, pause, ct), ct);
+                var (direct, tunnel, silentIdx) = PathMeasurer.Compare(directEach, tunnelEach);
+                var measured = chosen.Where((_, i) => !silentIdx.Contains(i)).ToList();
+                // Not measured because they did not answer (CDNs skipped in favour of the game's own servers are not listed).
+                var silent = ranked.Where(e => !responsive.Contains(e)).Concat(silentIdx.Select(i => chosen[i])).ToList();
+                result = new QualityResult(direct, tunnel, PathChooser.Choose(direct, tunnel), measured, silent);
+                Log.Info($"Path quality to {string.Join(", ", measured)}: direct {direct}, VPS {tunnel} => {result.Decision}" +
+                         (silent.Count > 0 ? $"; not answering, left out: {string.Join(", ", silent)}" : ""));
             }
             finally
             {
@@ -762,7 +784,7 @@ internal sealed partial class AppController
         bool wasVpn;
         lock (_autoGate) wasVpn = _autoVpn.Contains(exe);
 
-        var endpoints = profile.ProbeEndpoints.Where(IsMeasurable).Select(IPEndPoint.Parse).Take(MaxEndpointsPerMeasurement).ToList();
+        var endpoints = profile.ProbeEndpoints.Where(IsMeasurable).Select(IPEndPoint.Parse).ToList();
         if (endpoints.Count == 0 || _servers.Count == 0 || _sbStore.ActiveMain is null || !Settings.VpnEnabled)
         {
             Notify?.Invoke(profile.Name, endpoints.Count == 0

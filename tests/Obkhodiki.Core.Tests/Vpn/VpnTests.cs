@@ -492,6 +492,144 @@ public class PathQualityTests
         Assert.True(rtt >= TimeSpan.FromMilliseconds(50), rtt?.ToString());
     }
 
+    // A TLS 1.2-only server (seen on game backends): ServerHello, Certificate and ServerHelloDone split over
+    // records, then an alert (or a close) after a delay in answer to the out-of-order message.
+    private static async Task PlayTls12Server(Stream s, int secondDelayMs, bool closeInstead)
+    {
+        await ReadRecord(s);
+        var serverHello = Hrr();
+        serverHello[5 + 4 + 2] ^= 0xFF; // ordinary random: not a retry request
+        var certificate = new byte[] { 0x16, 0x03, 0x03, 0x00, 0x08, 0x0b, 0x00, 0x00, 0x04, 1, 2, 3, 4 };
+        var done = new byte[] { 0x16, 0x03, 0x03, 0x00, 0x04, 0x0e, 0x00, 0x00, 0x00 };
+        await s.WriteAsync(serverHello.Concat(certificate).ToArray());
+        await Task.Delay(20);
+        await s.WriteAsync(done);
+        await ReadRecord(s);
+        await Task.Delay(secondDelayMs);
+        if (!closeInstead) await s.WriteAsync(Alert);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Direct_Tls12Server_TimesSecondExchange(bool closeInstead)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = Task.Run(async () =>
+        {
+            using var c = await listener.AcceptTcpClientAsync();
+            await PlayTls12Server(c.GetStream(), 80, closeInstead);
+        });
+
+        var rtt = await new DirectTcpProbe().ConnectAsync((IPEndPoint)listener.LocalEndpoint, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await server;
+        listener.Stop();
+
+        Assert.NotNull(rtt);
+        Assert.True(rtt >= TimeSpan.FromMilliseconds(70), rtt?.ToString());
+    }
+
+    [Fact]
+    public void ClientHello_OffersTls13AndTls12()
+    {
+        var hex = Convert.ToHexString(TlsPing.BuildClientHello(new byte[32], null, null));
+        Assert.Contains("002B00050403040303", hex); // supported_versions: 1.3, 1.2
+        Assert.Contains("C02F", hex);               // an ECDHE suite for TLS 1.2
+    }
+
+    [Fact]
+    public void Stats_JitterOnlyWithinEachEndpoint()
+    {
+        // Two steady endpoints at different distances: no jitter, although the samples differ.
+        var stats = PathStats.From(new IReadOnlyList<TimeSpan?>[] { new[] { Ms(40), Ms(40), Ms(40) }, new[] { Ms(55), Ms(55) } });
+
+        Assert.Equal(0, stats.JitterMs);
+        Assert.Equal(0, stats.LossPercent);
+    }
+
+    [Fact]
+    public void Compare_EndpointSilentOnBothPaths_LeftOut()
+    {
+        var direct = new IReadOnlyList<TimeSpan?>[] { new[] { Ms(40), Ms(42) }, new TimeSpan?[] { null, null } };
+        var tunnel = new IReadOnlyList<TimeSpan?>[] { new[] { Ms(50), null }, new TimeSpan?[] { null, null } };
+
+        var result = PathMeasurer.Compare(direct, tunnel);
+
+        Assert.Equal(new[] { 1 }, result.Silent);
+        Assert.Equal(0, result.Direct.LossPercent);
+        Assert.Equal(50, result.Tunnel.LossPercent);
+    }
+
+    [Fact]
+    public void Compare_SilentOnlyOnOnePath_IsRealLoss()
+    {
+        var direct = new IReadOnlyList<TimeSpan?>[] { new TimeSpan?[] { null, null } };
+        var tunnel = new IReadOnlyList<TimeSpan?>[] { new[] { Ms(50), Ms(51) } };
+
+        var result = PathMeasurer.Compare(direct, tunnel);
+
+        Assert.Empty(result.Silent);
+        Assert.Equal(100, result.Direct.LossPercent);
+    }
+
+    [Fact]
+    public async Task SelectResponsive_KeepsOrderDropsSilent()
+    {
+        var a = new IPEndPoint(IPAddress.Parse("3.1.1.1"), 443);
+        var b = new IPEndPoint(IPAddress.Parse("3.1.1.2"), 443);
+        var c = new IPEndPoint(IPAddress.Parse("3.1.1.3"), 443);
+        var direct = new MapProbe(new() { [a] = Ms(40) });
+        var tunnel = new MapProbe(new() { [a] = Ms(50), [c] = Ms(60) });
+
+        var result = await PathMeasurer.SelectResponsiveAsync(direct, tunnel, new[] { a, b, c }, TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        Assert.Equal(new[] { a, c }, result);
+    }
+
+    private sealed class MapProbe : IConnectProbe
+    {
+        private readonly Dictionary<IPEndPoint, TimeSpan?> _answers;
+        public MapProbe(Dictionary<IPEndPoint, TimeSpan?> answers) => _answers = answers;
+        public Task<TimeSpan?> ConnectAsync(IPEndPoint target, TimeSpan timeout, CancellationToken ct) =>
+            Task.FromResult(_answers.TryGetValue(target, out var v) ? v : null);
+    }
+
+    [Theory]
+    [InlineData("104.18.124.108", true)]   // Cloudflare
+    [InlineData("199.232.173.242", true)]  // Fastly
+    [InlineData("1.1.1.1", true)]
+    [InlineData("52.215.132.236", false)]  // AWS
+    [InlineData("8.8.8.8", false)]
+    public void AnycastCdn_Detected(string ip, bool expected)
+    {
+        Assert.Equal(expected, TlsPing.IsAnycastCdn(IPAddress.Parse(ip)));
+    }
+
+    [Fact]
+    public void RankForProbe_NearGameServersFirstCdnLast()
+    {
+        var cdn = IPEndPoint.Parse("104.18.124.108:443");
+        var far = IPEndPoint.Parse("20.1.1.1:443");
+        var sameNet = IPEndPoint.Parse("52.215.132.236:8080");
+        var sameHost = IPEndPoint.Parse("52.215.9.9:443");
+        var udpServers = new[] { IPAddress.Parse("52.215.132.10"), IPAddress.Parse("52.215.9.9") };
+
+        var ranked = TlsPing.RankForProbe(new[] { cdn, far, sameNet, sameHost }, udpServers);
+
+        Assert.Equal(new[] { sameHost, sameNet, far, cdn }, ranked);
+    }
+
+    [Fact]
+    public void RankForProbe_WithoutGameServers_TlsPortsFirstStable()
+    {
+        var a = IPEndPoint.Parse("20.1.1.1:7000");
+        var b = IPEndPoint.Parse("20.1.1.2:443");
+        var c = IPEndPoint.Parse("20.1.1.3:8443");
+
+        Assert.Equal(new[] { b, c, a }, TlsPing.RankForProbe(new[] { a, b, c }));
+    }
+
     [Fact]
     public async Task Socks5_TargetUnreachable_Null()
     {
@@ -568,5 +706,18 @@ public class SingBoxUnpackTests
     public void Unpack_DuplicateExe_Rejected()
     {
         Assert.Throws<InvalidDataException>(() => SingBoxUpdater.UnpackZip(Zip(("a/sing-box.exe", Exe), ("b/sing-box.exe", Exe))));
+    }
+}
+
+public class PathPickTests
+{
+    [Fact]
+    public void Pick_SkipsCdnWhenOwnServersAnswer()
+    {
+        var cdn = IPEndPoint.Parse("104.18.124.108:443");
+        var game = IPEndPoint.Parse("52.215.132.236:443");
+
+        Assert.Equal(new[] { game }, PathMeasurer.PickForMeasurement(new[] { cdn, game }, 3));
+        Assert.Equal(new[] { cdn }, PathMeasurer.PickForMeasurement(new[] { cdn }, 3));
     }
 }

@@ -289,7 +289,7 @@ public sealed partial class VpnViewModel : ObservableObject
 
         var games = c.Settings.GameProfiles
             .Select(p => new QualityTarget($"Игра: {p.Name}",
-                p.ProbeEndpoints.Select(IPEndPoint.Parse).Where(e => TlsPing.IsTlsPort(e.Port)).Take(3).ToList()))
+                p.ProbeEndpoints.Select(IPEndPoint.Parse).ToList()))
             .ToList();
         var measurable = games.Where(t => t.Endpoints.Count > 0).ToList();
         var missing = games.Where(t => t.Endpoints.Count == 0).Select(t => t.Title[6..]).ToList();
@@ -478,9 +478,9 @@ public sealed partial class VpnViewModel : ObservableObject
         IReadOnlyList<IPEndPoint> endpoints;
         if (CustomTarget.Trim().Length > 0)
         {
-            if (!IPEndPoint.TryParse(CustomTarget.Trim(), out var ep) || !TlsPing.IsTlsPort(ep.Port))
+            if (!IPEndPoint.TryParse(CustomTarget.Trim(), out var ep) || ep.Port == 0)
             {
-                Verdict = "Введите адрес TLS-сервера в виде IP:443, например 1.1.1.1:443.";
+                Verdict = "Введите адрес в виде IP:порт, например 1.1.1.1:443.";
                 return;
             }
             endpoints = new[] { ep };
@@ -491,13 +491,13 @@ public sealed partial class VpnViewModel : ObservableObject
         }
         else
         {
-            Verdict = "Нет адресов для замера: дообучите игру или введите адрес вида IP:443.";
+            Verdict = "Нет адресов для замера: дообучите игру или введите адрес вида IP:порт.";
             return;
         }
 
         IsMeasuring = true;
         HasResult = false;
-        Verdict = "Идёт замер, около 10–30 секунд…";
+        Verdict = "Идёт замер, около 15–40 секунд…";
         using var cts = new CancellationTokenSource();
         _measureCts = cts;
         try
@@ -512,7 +512,13 @@ public sealed partial class VpnViewModel : ObservableObject
             Direct.Set(result.Direct, !vpnWins);
             Tunnel.Set(result.Tunnel, vpnWins);
             HasResult = true;
-            Verdict = (vpnWins ? "Лучше через VPS: " : "Лучше напрямую: ") + result.Decision.Reason;
+            var game = CustomTarget.Trim().Length == 0 && SelectedTarget?.Title.StartsWith("Игра", StringComparison.Ordinal) == true;
+            Verdict = (vpnWins ? "Лучше через VPS: " : "Лучше напрямую: ") + result.Decision.Reason + "." +
+                      $"\nЗамерено: {string.Join(", ", result.Measured)}." +
+                      (result.Silent.Count > 0 ? $" Не отвечают на замер и не учтены: {string.Join(", ", result.Silent)}." : "") +
+                      (game && result.OnlyCdn
+                          ? "\nОтвечают только адреса CDN (Cloudflare/Fastly) — они рядом с вами, а не с сервером игры, результат приблизительный. Дообучите игру во время матча."
+                          : "");
         }
         finally
         {
