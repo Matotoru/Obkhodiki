@@ -367,6 +367,18 @@ public class MultiServerConfigTests
     }
 
     [Fact]
+    public void NoHostIpv6_TunnelIpv4Only_DnsWithoutAaaa()
+    {
+        var root = Build(Options(full: true) with { HostIpv6 = false });
+        Assert.Equal(new[] { "172.19.0.1/30" }, root["inbounds"]![0]!["address"]!.AsArray().Select(n => (string)n!));
+        Assert.Equal("ipv4_only", (string?)root["dns"]!["strategy"]);
+
+        var withV6 = Build(Options(full: true));
+        Assert.Equal(2, withV6["inbounds"]![0]!["address"]!.AsArray().Count);
+        Assert.Equal("prefer_ipv4", (string?)withV6["dns"]!["strategy"]);
+    }
+
+    [Fact]
     public void FullTunnel_AppDownloadHostsResolvedLocallyFirst()
     {
         var root = Build(Options(full: true) with { LocalDnsDomains = new[] { "raw.githubusercontent.com", "Panel.Example.com", "not a domain" } });

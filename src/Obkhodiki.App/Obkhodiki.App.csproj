@@ -26,7 +26,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Obkhodiki</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.4.3</Version>
+    <Version>0.4.4</Version>
     <!-- Elevated app: DOTNET_STARTUP_HOOKS from the (user-writable) environment must not load code into it. -->
     <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>

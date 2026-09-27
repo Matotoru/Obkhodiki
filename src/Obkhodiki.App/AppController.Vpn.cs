@@ -64,7 +64,8 @@ internal sealed partial class AppController
         VpnPlan Plan,
         IReadOnlyList<LocalRuleSet> ProxySets,
         IReadOnlyList<LocalRuleSet> DirectSets,
-        IReadOnlyList<string> LocalDns);
+        IReadOnlyList<string> LocalDns,
+        bool HostIpv6);
 
     // Servers sing-box refused to load (checked before each start); left out for the rest of the session.
     private readonly HashSet<string> _rejectedServers = new();
@@ -323,16 +324,17 @@ internal sealed partial class AppController
 
         var (proxySets, directSets, stamps) = await PrepareRuleSetsAsync(plan, refreshRules);
         var tun = plan.NeedsTunnel;
+        var hostIpv6 = HostHasIpv6();
         var signature = $"{_source.Signature()}|{tun}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
-                        $"{string.Join(",", plan.DirectProcesses)}|{stamps}";
+                        $"{string.Join(",", plan.DirectProcesses)}|{stamps}|v6={hostIpv6}";
         if (IsVpnRunning && signature == _appliedSignature) return;
 
         var localDns = new[] { "raw.githubusercontent.com", _source.SubscriptionHost }.Where(h => h is not null).Select(h => h!).ToList();
-        var launch = await DropRejectedServersAsync(new SingBoxLaunch(_servers, ActiveServerTag, tun, plan, proxySets, directSets, localDns));
+        var launch = await DropRejectedServersAsync(new SingBoxLaunch(_servers, ActiveServerTag, tun, plan, proxySets, directSets, localDns, hostIpv6));
         await Task.Run(() => StartSingBoxAsync(launch));
         _appliedSignature = signature;
         _appliedLaunch = launch;
-        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {_source.Describe()}, tunnel {tun}, full {plan.FullTunnel}, " +
+        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {_source.Describe()}, tunnel {tun}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
                  $"processes [{string.Join(", ", plan.Processes)}], domains {plan.Domains.Count}, rule-sets [{string.Join(", ", proxySets.Concat(directSets).Select(r => r.Tag))}]");
         Changed();
     }
@@ -489,6 +491,7 @@ internal sealed partial class AppController
             DirectRuleSets = launch.DirectSets,
             ClashApi = api,
             LocalDnsDomains = launch.LocalDns,
+            HostIpv6 = launch.HostIpv6,
         };
         return SingBoxConfig.Build(launch.Servers, launch.ActiveTag, options);
     }
@@ -601,6 +604,43 @@ internal sealed partial class AppController
         {
             return "(log unreadable)";
         }
+    }
+
+    /// <summary>
+    /// Whether a real network adapter (not our tunnel) has a global IPv6 address and an IPv6 gateway, i.e. the
+    /// internet is reachable over IPv6. Many Russian home and mobile connections have none.
+    /// </summary>
+    private static bool HostHasIpv6()
+    {
+        try
+        {
+            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up
+                    || nic.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Loopback or System.Net.NetworkInformation.NetworkInterfaceType.Tunnel
+                    || nic.Name.Equals(SingBoxConfig.TunInterface, StringComparison.OrdinalIgnoreCase)
+                    || nic.Name.Equals("ZapretHub", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                var props = nic.GetIPProperties();
+                var gateway = props.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetworkV6 && !g.Address.Equals(IPAddress.IPv6Any));
+                var global = props.UnicastAddresses.Any(u => u.Address.AddressFamily == AddressFamily.InterNetworkV6 && IsGlobalIpv6(u.Address));
+                if (gateway && global) return true;
+            }
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException ex)
+        {
+            Log.Error("IPv6 check failed, assuming none", ex);
+        }
+        return false;
+    }
+
+    private static bool IsGlobalIpv6(IPAddress a)
+    {
+        if (a.IsIPv6LinkLocal || a.IsIPv6SiteLocal || a.IsIPv6Teredo || a.IsIPv6Multicast || IPAddress.IsLoopback(a)) return false;
+        var first = a.GetAddressBytes()[0];
+        return (first & 0xFE) != 0xFC; // fc00::/7 unique-local addresses are not the internet
     }
 
     private static int FreeLocalPort()

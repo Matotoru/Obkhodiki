@@ -56,6 +56,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.4.4", new[]
+        {
+            "VPS больше не ломает сайты без IPv6-интернета: если у провайдера нет IPv6, туннель работает только по IPv4. Раньше при включённом VPS не открывались Яндекс, Google и другие сайты с IPv6-адресами, а с категорией «Нейросети» — Claude и ChatGPT.",
+        }),
         new Entry("0.4.3", new[]
         {
             "Исправлено самообновление: после установки новая версия принимала установщик за уже запущенную программу, и обновление откатывалось.",

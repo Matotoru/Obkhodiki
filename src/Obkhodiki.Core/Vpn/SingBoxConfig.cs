@@ -36,6 +36,13 @@ public sealed record SingBoxOptions(
     /// rule-sets). If the active server dies, the app must still be able to fetch a fresh server list.
     /// </summary>
     public IReadOnlyList<string> LocalDnsDomains { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// The computer really reaches the internet over IPv6. When it does not, the tunnel must not offer IPv6:
+    /// Windows would then route IPv6 into it, apps would try their AAAA addresses first and every such
+    /// connection would fail (seen as "Yandex does not open, Ozon does" — only some sites have IPv6).
+    /// </summary>
+    public bool HostIpv6 { get; init; } = true;
 }
 
 /// <summary>Per-run credentials for the local probe port, so other local programs cannot ride the tunnel.</summary>
@@ -116,8 +123,12 @@ public static partial class SingBoxConfig
                 ["type"] = "tun",
                 ["tag"] = "tun-in",
                 ["interface_name"] = TunInterface,
-                // Both families: with IPv4 only, selected programs would leak straight out over IPv6.
-                ["address"] = new JsonArray("172.19.0.1/30", "fdfe:dcba:9876::1/126"),
+                // Both families when the computer has IPv6: with IPv4 only, selected programs would leak straight out
+                // over IPv6. Without IPv6 there is nothing to leak through, and an IPv6 address here would only lure
+                // apps into connections that cannot work.
+                ["address"] = options.HostIpv6
+                    ? new JsonArray("172.19.0.1/30", "fdfe:dcba:9876::1/126")
+                    : new JsonArray("172.19.0.1/30"),
                 ["auto_route"] = true,
                 // On Windows "strict" adds firewall rules against DNS queries bypassing the adapter: needed whenever
                 // lookups go through the VPS, or Windows' parallel lookup to the ISP (possibly poisoned) would win.
@@ -190,7 +201,7 @@ public static partial class SingBoxConfig
         var root = new JsonObject
         {
             ["log"] = new JsonObject { ["level"] = "warn", ["timestamp"] = true, ["output"] = options.LogPath },
-            ["dns"] = BuildDns(full, remoteDns, domains, proxyDnsSets, directDnsSets,
+            ["dns"] = BuildDns(full, remoteDns, options.HostIpv6, domains, proxyDnsSets, directDnsSets,
                 options.LocalDnsDomains.Select(NormalizeDomain).Where(d => d is not null).Select(d => d!).Distinct().ToList()),
             ["inbounds"] = inbounds,
             ["outbounds"] = outbounds,
@@ -214,11 +225,17 @@ public static partial class SingBoxConfig
         return result;
     }
 
-    private static JsonObject BuildDns(bool full, bool remoteDns, List<string> domains, List<LocalRuleSet> proxySets, List<LocalRuleSet> directSets,
-        List<string> localDomains)
+    private static JsonObject BuildDns(bool full, bool remoteDns, bool hostIpv6, List<string> domains, List<LocalRuleSet> proxySets,
+        List<LocalRuleSet> directSets, List<string> localDomains)
     {
         var servers = new JsonArray(new JsonObject { ["type"] = "local", ["tag"] = "local" });
-        var dns = new JsonObject { ["servers"] = servers, ["final"] = full ? "remote" : "local" };
+        var dns = new JsonObject
+        {
+            ["servers"] = servers,
+            ["final"] = full ? "remote" : "local",
+            // Answers to apps: no AAAA at all without IPv6; with it, IPv4 first (many VPS have no IPv6 either).
+            ["strategy"] = hostIpv6 ? "prefer_ipv4" : "ipv4_only",
+        };
         if (!remoteDns) return dns;
 
         servers.Add(new JsonObject { ["type"] = "https", ["tag"] = "remote", ["server"] = "1.1.1.1", ["detour"] = ProxyTag });
