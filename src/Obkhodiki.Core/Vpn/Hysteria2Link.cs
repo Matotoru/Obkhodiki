@@ -18,6 +18,12 @@ public sealed record Hysteria2Link(
 {
     public string Protocol => "hysteria2";
 
+    /// <summary>
+    /// Port hopping: the client moves between these UDP ports (sing-box server_ports), which makes blocking one
+    /// port useless. Null for a single port.
+    /// </summary>
+    public IReadOnlyList<(int From, int To)>? PortRanges { get; init; }
+
     public static Hysteria2Link Parse(string text)
     {
         var raw = text.Trim();
@@ -27,7 +33,10 @@ public sealed record Hysteria2Link(
         }
         var (userInfo, hostPort, parameters, name) = LinkParsing.Split(raw, "пароля");
         var password = Uri.UnescapeDataString(userInfo);
-        var (host, port) = LinkParsing.SplitHostPort(hostPort);
+        var (host, ports) = LinkParsing.SplitHostPorts(hostPort);
+        // Some clients (v2rayN) put the hopping range into "mport" and keep one port in the address.
+        if (parameters.Get("mport") is { Length: > 0 } mport) ports = ports.Concat(LinkParsing.ParsePortRanges(mport)).Distinct().ToList();
+        var port = ports[0].From;
 
         string? obfs = null;
         if (parameters.TryGetValue("obfs", out var obfsType) && obfsType.Length > 0 && !string.Equals(obfsType, "salamander", StringComparison.OrdinalIgnoreCase))
@@ -44,7 +53,10 @@ public sealed record Hysteria2Link(
         LinkParsing.ValidateSecret(password, "Пароль");
         if (obfs is not null) LinkParsing.ValidateSecret(obfs, "obfs-password");
 
-        return new Hysteria2Link(host, port, password, obfs, sni, parameters.Flag("insecure"), alpn, name);
+        return new Hysteria2Link(host, port, password, obfs, sni, parameters.Flag("insecure"), alpn, name)
+        {
+            PortRanges = ports.Count == 1 && ports[0].From == ports[0].To ? null : ports,
+        };
     }
 
     public JsonObject ToOutbound(string tag)
@@ -66,6 +78,12 @@ public sealed record Hysteria2Link(
             ["password"] = Password,
             ["tls"] = tls,
         };
+        if (PortRanges is { } ranges)
+        {
+            outbound.Remove("server_port");
+            outbound["server_ports"] = LinkParsing.Array(ranges.Select(r => $"{r.From}:{r.To}"));
+            outbound["hop_interval"] = "30s";
+        }
         if (ObfsPassword is not null) outbound["obfs"] = new JsonObject { ["type"] = "salamander", ["password"] = ObfsPassword };
         return outbound;
     }

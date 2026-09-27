@@ -23,7 +23,7 @@ internal sealed partial class AppController
     public const string SingBoxProductName = "sing-box";
     private static readonly TimeSpan GameWatchInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan CrashRestartDelay = TimeSpan.FromSeconds(5);
-    private const int SamplesPerEndpoint = 6;
+    private const int SamplesPerEndpoint = 10;
     private const int MaxEndpointsPerMeasurement = 3;
     private const int MaxCrashRestarts = 3;
 
@@ -271,8 +271,8 @@ internal sealed partial class AppController
         ForgetAutoRoute(profile.ProcessName);
         if (route == GameRoute.Auto && !profile.ProbeEndpoints.Any(IsMeasurable))
         {
-            Notify?.Invoke("Авто-маршрут", $"Для «{profile.Name}» нет адресов для замера (нужны TLS-серверы игры). " +
-                                          "Выполните «Дообучить»; пока игра будет идти напрямую.", ToolTipIcon.Warning);
+            Notify?.Invoke("Авто-маршрут", $"Для «{profile.Name}» нет адресов для замера. Выполните «Дообучить» во время матча. " +
+                                          "Если игра работает только по UDP, замерить её не получится — выберите маршрут вручную.", ToolTipIcon.Warning);
         }
         await ApplyVpnCoreAsync(interactive: true, needProbe: false);
     });
@@ -788,9 +788,9 @@ internal sealed partial class AppController
         if (endpoints.Count == 0 || _servers.Count == 0 || _sbStore.ActiveMain is null || !Settings.VpnEnabled)
         {
             Notify?.Invoke(profile.Name, endpoints.Count == 0
-                ? "Напрямую: нет адресов для замера (выполните «Дообучить»)."
+                ? "Авто не смог выбрать и оставил «Напрямую»: нет адресов для замера. Выполните «Дообучить» во время матча или выберите маршрут вручную."
                 : !Settings.VpnEnabled ? "Напрямую: VPS выключен."
-                : "Напрямую: VPS не настроен.", ToolTipIcon.Info);
+                : "Напрямую: VPS не настроен.", endpoints.Count == 0 ? ToolTipIcon.Warning : ToolTipIcon.Info);
             lock (_autoGate)
             {
                 _autoVpn.Remove(exe);
@@ -814,9 +814,12 @@ internal sealed partial class AppController
                 _autoDirect.Add(exe);
             }
         }
+        // No answer usually means the game talks UDP only: say so instead of silently staying direct.
         Notify?.Invoke(profile.Name, result is null
-            ? "Напрямую: замер не удался."
-            : (viaVpn ? "Через VPS: " : "Напрямую: ") + result.Decision.Reason, ToolTipIcon.Info);
+            ? "Авто не смог выбрать и оставил «Напрямую»: адреса игры не ответили на замер (так бывает у игр только на UDP). " +
+              "Если есть лаги, выберите маршрут «Через VPS» вручную и сравните."
+            : (viaVpn ? "Через VPS: " : "Напрямую: ") + result.Decision.Reason,
+            result is null ? ToolTipIcon.Warning : ToolTipIcon.Info);
         // In full-tunnel mode a "direct" decision also changes the config (the game gets its own direct rule).
         return viaVpn != wasVpn || Settings.VpnFullTunnel;
     }

@@ -78,6 +78,38 @@ internal static partial class LinkParsing
         return (afterScheme[..at], afterScheme[(at + 1)..], ParseQuery(query), SafeName(name));
     }
 
+    /// <summary>
+    /// Host and a port list such as "443,20000-30000" (Hysteria2 port hopping). A single port is a one-element list.
+    /// </summary>
+    public static (string Host, IReadOnlyList<(int From, int To)> Ports) SplitHostPorts(string hostPort)
+    {
+        var colon = hostPort.LastIndexOf(':');
+        if (colon <= 0) throw new FormatException("В ссылке нет порта сервера.");
+        var portText = hostPort[(colon + 1)..];
+        var (host, _) = SplitHostPort(hostPort[..colon] + ":1");
+        return (host, ParsePortRanges(portText));
+    }
+
+    public static IReadOnlyList<(int From, int To)> ParsePortRanges(string text)
+    {
+        static int Port(string p) =>
+            int.TryParse(p, System.Globalization.NumberStyles.None, null, out var port) && port is >= 1 and <= 65535
+                ? port
+                : throw new FormatException("Неверный порт сервера.");
+        var parts = text.Split(',');
+        if (parts.Length is 0 or > 16) throw new FormatException("Неверный список портов сервера.");
+        var result = new List<(int, int)>();
+        foreach (var part in parts)
+        {
+            var dash = part.IndexOf('-');
+            var from = Port(dash < 0 ? part : part[..dash]);
+            var to = dash < 0 ? from : Port(part[(dash + 1)..]);
+            if (to < from) throw new FormatException("Неверный диапазон портов сервера.");
+            result.Add((from, to));
+        }
+        return result;
+    }
+
     public static (string Host, int Port) SplitHostPort(string hostPort)
     {
         string host;

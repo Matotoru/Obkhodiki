@@ -10,6 +10,9 @@ namespace Obkhodiki.Core.Vpn;
 /// <param name="LossPercent">Share of attempts that failed or timed out.</param>
 public sealed record PathStats(double? MedianMs, double JitterMs, double LossPercent, int Samples)
 {
+    /// <summary>Failed attempts.</summary>
+    public int Lost => (int)Math.Round(LossPercent * Samples / 100);
+
     public static PathStats From(IReadOnlyList<TimeSpan?> samples) => From(new[] { samples });
 
     /// <summary>Samples grouped per endpoint: different servers differ in latency, and that is not jitter.</summary>
@@ -44,18 +47,23 @@ public sealed record PathDecision(PathChoice Choice, string Reason);
 public static class PathChooser
 {
     public const double LossMarginPercent = 2;
+    // With a few dozen attempts one lost packet is several percent: a single random loss must not pick the route.
+    public const int LossMarginPackets = 2;
     public const double LatencyMarginMs = 15;
+
+    private static bool FewerLosses(PathStats a, PathStats b) =>
+        a.LossPercent + LossMarginPercent < b.LossPercent && b.Lost - a.Lost >= LossMarginPackets;
 
     public static PathDecision Choose(PathStats direct, PathStats tunnel)
     {
         if (tunnel.MedianMs is null) return new(PathChoice.Direct, "VPS не отвечает");
         if (direct.MedianMs is null) return new(PathChoice.Vpn, "напрямую сервер недоступен");
 
-        if (tunnel.LossPercent + LossMarginPercent < direct.LossPercent)
+        if (FewerLosses(tunnel, direct))
         {
             return new(PathChoice.Vpn, $"меньше потерь: {tunnel.LossPercent:F0}% против {direct.LossPercent:F0}%");
         }
-        if (direct.LossPercent + LossMarginPercent < tunnel.LossPercent)
+        if (FewerLosses(direct, tunnel))
         {
             return new(PathChoice.Direct, $"через VPS больше потерь: {tunnel.LossPercent:F0}% против {direct.LossPercent:F0}%");
         }

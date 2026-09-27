@@ -34,6 +34,31 @@ public class Hysteria2LinkTests
         Assert.Equal(port, link.Port);
     }
 
+    [Theory]
+    [InlineData("hy2://pw@a.example:443,5000-6000", new[] { "443:443", "5000:6000" })]
+    [InlineData("hy2://pw@a.example:20000-30000", new[] { "20000:30000" })]
+    [InlineData("hy2://pw@a.example:443?mport=20000-30000", new[] { "443:443", "20000:30000" })]
+    [InlineData("hy2://pw@[2001:db8::1]:443,8443", new[] { "443:443", "8443:8443" })]
+    public void Parse_PortHopping_ToServerPorts(string text, string[] expected)
+    {
+        var link = Hysteria2Link.Parse(text);
+        var outbound = link.ToOutbound("t");
+
+        Assert.Null(outbound["server_port"]);
+        Assert.Equal(expected, outbound["server_ports"]!.AsArray().Select(n => (string)n!).ToArray());
+        Assert.Equal("30s", (string?)outbound["hop_interval"]);
+        Assert.Equal(int.Parse(expected[0].Split(':')[0]), link.Port);
+    }
+
+    [Fact]
+    public void Parse_SinglePort_NoHopping()
+    {
+        var outbound = Hysteria2Link.Parse("hy2://pw@a.example:443").ToOutbound("t");
+
+        Assert.Equal(443, (int)outbound["server_port"]!);
+        Assert.Null(outbound["server_ports"]);
+    }
+
     [Fact]
     public void Parse_InsecureFlag()
     {
@@ -46,7 +71,10 @@ public class Hysteria2LinkTests
     [InlineData("hy2://pw@a.example")]
     [InlineData("hy2://pw@a.example:0")]
     [InlineData("hy2://pw@a.example:70000")]
-    [InlineData("hy2://pw@a.example:443,5000-6000")]
+    [InlineData("hy2://pw@a.example:6000-5000")]
+    [InlineData("hy2://pw@a.example:443,5000-70000")]
+    [InlineData("hy2://pw@a.example:443,")]
+    [InlineData("hy2://pw@a.example:443?mport=1-x")]
     [InlineData("hy2://pw@bad_host!:443")]
     [InlineData("hy2://pw@a.example:443?obfs=other&obfs-password=x")]
     [InlineData("hy2://pw@a.example:443?sni=evil%22%2C%22x")]
@@ -234,7 +262,7 @@ public class PathQualityTests
         Assert.Equal(100, stats.LossPercent);
     }
 
-    private static PathStats S(double? median, double loss) => new(median, 0, loss, 10);
+    private static PathStats S(double? median, double loss) => new(median, 0, loss, 30);
 
     [Theory]
     [InlineData(50, 0, 60, 0, PathChoice.Direct)]    // VPS detour slower: stay direct
@@ -246,6 +274,18 @@ public class PathQualityTests
     public void Chooser_Rules(double dMed, double dLoss, double tMed, double tLoss, PathChoice expected)
     {
         Assert.Equal(expected, PathChooser.Choose(S(dMed, dLoss), S(tMed, tLoss)).Choice);
+    }
+
+    [Fact]
+    public void Chooser_OneRandomLoss_DoesNotDecide()
+    {
+        // 1 of 18 is 5.6%, above the percent margin, but a single packet is noise.
+        var direct = new PathStats(50, 0, 100.0 / 18, 18);
+        var tunnel = new PathStats(80, 0, 0, 18);
+
+        Assert.Equal(1, direct.Lost);
+        Assert.Equal(PathChoice.Direct, PathChooser.Choose(direct, tunnel).Choice);
+        Assert.Equal(PathChoice.Vpn, PathChooser.Choose(direct with { LossPercent = 200.0 / 18 }, tunnel).Choice);
     }
 
     [Fact]
