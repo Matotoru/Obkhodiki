@@ -29,6 +29,10 @@ static class Program
         try
         {
             mutex = new Mutex(initiallyOwned: true, @"Local\Obkhodiki.SingleInstance", out isFirst);
+            // "Created new" is not "nobody runs": the mutex also exists while another process (the updater)
+            // merely holds a handle. Ownership is what counts; right after an update the old copy may still be
+            // letting go of it, so wait a little then.
+            if (!isFirst) isFirst = TryOwn(mutex, args.Contains(SelfUpdate.UpdatedArgument) ? TimeSpan.FromSeconds(30) : TimeSpan.Zero);
         }
         catch (UnauthorizedAccessException)
         {
@@ -130,6 +134,19 @@ static class Program
         {
             Log.Error("Fatal error", ex);
             MessageBox.Show(ex.Message, "Obkhodiki", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private static bool TryOwn(Mutex mutex, TimeSpan wait)
+    {
+        try
+        {
+            return mutex.WaitOne(wait);
+        }
+        catch (AbandonedMutexException)
+        {
+            // The previous owner ended without releasing it: ours now.
+            return true;
         }
     }
 

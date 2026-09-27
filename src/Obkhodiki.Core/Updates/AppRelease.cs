@@ -56,6 +56,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.4.3", new[]
+        {
+            "Исправлено самообновление: после установки новая версия принимала установщик за уже запущенную программу, и обновление откатывалось.",
+        }),
         new Entry("0.4.2", new[]
         {
             "Галочки категорий VPS (Instagram, нейросети, YouTube…) применяются сразу — кнопка «Сохранить» нужна только для программ и сайтов.",

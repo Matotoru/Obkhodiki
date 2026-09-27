@@ -125,7 +125,9 @@ internal static class SelfUpdate
             StopOld(oldPid, oldStartTicks);
 
             // Nobody (the logon task, a double click) may start the app while its files are being swapped.
-            using var mutex = new Mutex(false, @"Local\Obkhodiki.SingleInstance");
+            // Closed before the new version starts: while any handle is open the mutex exists, and an app that
+            // checks "does it exist" would take the installer for a running copy of itself.
+            var mutex = new Mutex(false, @"Local\Obkhodiki.SingleInstance");
             var owned = false;
             try
             {
@@ -135,7 +137,11 @@ internal static class SelfUpdate
             {
                 owned = true;
             }
-            if (!owned) throw new TimeoutException("Obkhodiki всё ещё запущен.");
+            if (!owned)
+            {
+                mutex.Dispose();
+                throw new TimeoutException("Obkhodiki всё ещё запущен.");
+            }
 
             UpdatePackage.SwapResult swap;
             try
@@ -146,6 +152,7 @@ internal static class SelfUpdate
             finally
             {
                 mutex.ReleaseMutex();
+                mutex.Dispose();
             }
             Log.Info($"Installed {CurrentVersion} into {target}, waiting for it to start");
 
