@@ -104,3 +104,7 @@ Obkhodiki сделан [matotoru](https://github.com/Matotoru) на основе
 | [.NET](https://github.com/dotnet/runtime) | .NET Foundation | MIT | платформа |
 
 zapret, стратегии Flowseal, tg-ws-proxy, sing-box и наборы правил не входят в архив Obkhodiki: программа скачивает их из официальных релизов авторов и запускает без изменений. Тексты лицензий встроенных библиотек — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Лицензия
+
+Obkhodiki распространяется по лицензии [MIT](LICENSE). Лицензии используемых проектов — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

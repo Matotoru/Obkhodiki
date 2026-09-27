@@ -1,0 +1,30 @@
+name: CI
+
+# Build and test every push and pull request, so a broken main shows up before a release tag.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build Obkhodiki.slnx -c Release
+
+      - name: Test
+        run: dotnet test tests/Obkhodiki.Core.Tests -c Release --no-build
