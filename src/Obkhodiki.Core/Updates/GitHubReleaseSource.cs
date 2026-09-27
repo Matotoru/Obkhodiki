@@ -73,7 +73,7 @@ public abstract partial class GitHubReleaseSource
         }
         catch (HttpRequestException ex)
         {
-            throw new UpdateException($"Could not reach GitHub to check {_displayName} updates.", ex);
+            throw new UpdateException($"Не удалось связаться с GitHub, чтобы проверить обновления {_displayName}: {ex.Message}", ex);
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {

@@ -19,7 +19,10 @@ namespace Obkhodiki.App;
 internal sealed partial class AppController : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
+    // Never the Windows/environment proxy: another VPN client often leaves one set to a local port it no longer
+    // listens on (and .NET reads it once per process), which broke every update check. The app routes its own
+    // traffic (zapret, the sing-box tunnel).
+    private readonly HttpClient _http = new(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(60) };
     private readonly EngineStore _store = new(AppPaths.EngineRoot);
     private readonly AppSettingsStore _settingsStore = new(AppPaths.Settings);
     private readonly WinwsRunner _runner;

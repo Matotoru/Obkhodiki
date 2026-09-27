@@ -278,7 +278,7 @@ public sealed partial class GamesViewModel : ObservableObject
                 try
                 {
                     // The real file is a few MB; the cap only stops a runaway response.
-                    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 32 * 1024 * 1024 };
+                    using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 32 * 1024 * 1024 };
                     aws = AwsIpRanges.Parse(await http.GetStringAsync(AwsIpRanges.Source));
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException)

@@ -56,6 +56,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.5.1", new[]
+        {
+            "Проверка и скачивание обновлений больше не ломаются из-за прокси, который оставила в Windows другая VPN-программа (например, 127.0.0.1:2080): Obkhodiki ходит в интернет своими путями и системный прокси не использует.",
+        }),
         new Entry("0.5.0", new[]
         {
             "Программа переехала на .NET 10 и теперь одна: .NET встроен внутрь, отдельно ничего ставить не нужно. Поддержка .NET 8, на котором она работала раньше, заканчивается 10 ноября 2026 года.",
