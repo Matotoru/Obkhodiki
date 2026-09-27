@@ -206,6 +206,16 @@ internal sealed partial class AppController
         return ok;
     }
 
+    /// <summary>Category checkboxes apply on their own, without the programs/sites "Save" button.</summary>
+    public Task SetVpnCategoriesAsync(IReadOnlyList<string> proxyCategories, IReadOnlyList<string> directCategories) =>
+        Serialized("Настройка VPS…", silentErrors: false, async () =>
+        {
+            Settings.VpnProxyCategories = RuleCatalog.Sanitize(proxyCategories, RuleCatalog.Proxy);
+            Settings.VpnDirectCategories = RuleCatalog.Sanitize(directCategories, RuleCatalog.Direct);
+            _settingsStore.Save(Settings);
+            await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+        });
+
     /// <summary>"Включить VPS": everything through the VPS except Russian sites and direct games.</summary>
     public Task SetVpnFullTunnelAsync(bool on) => Serialized(on ? "Включение VPS…" : "Выключение VPS…", silentErrors: false, async () =>
     {

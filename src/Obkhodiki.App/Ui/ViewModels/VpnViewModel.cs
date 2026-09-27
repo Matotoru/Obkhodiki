@@ -118,8 +118,17 @@ public sealed partial class VpnViewModel : ObservableObject
     public VpnViewModel(ShellViewModel shell)
     {
         _shell = shell;
-        ProxyCategories = RuleCatalog.Proxy.Select(c => new CategoryOption(c, () => ListsDirty = true)).ToList();
-        DirectCategories = RuleCatalog.Direct.Select(c => new CategoryOption(c, () => ListsDirty = true)).ToList();
+        ProxyCategories = RuleCatalog.Proxy.Select(c => new CategoryOption(c, ScheduleCategoriesApply)).ToList();
+        DirectCategories = RuleCatalog.Direct.Select(c => new CategoryOption(c, ScheduleCategoriesApply)).ToList();
+        // Several ticks in a row become one restart of the tunnel.
+        _categoriesTimer.Tick += (_, _) =>
+        {
+            _categoriesTimer.Stop();
+            _categoriesPending = false;
+            var proxy = ProxyCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList();
+            var direct = DirectCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList();
+            _ = _shell.RunAsync(c => c.SetVpnCategoriesAsync(proxy, direct));
+        };
         Servers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ManyServers));
     }
 
@@ -127,6 +136,16 @@ public sealed partial class VpnViewModel : ObservableObject
     {
         if (_syncing) return;
         _ = _shell.RunAsync(c => c.SetVpnEnabledAsync(value));
+    }
+
+    private readonly System.Windows.Threading.DispatcherTimer _categoriesTimer = new() { Interval = TimeSpan.FromSeconds(1.2) };
+    private bool _categoriesPending;
+
+    private void ScheduleCategoriesApply()
+    {
+        _categoriesPending = true;
+        _categoriesTimer.Stop();
+        _categoriesTimer.Start();
     }
 
     partial void OnFullTunnelChanged(bool value)
@@ -239,7 +258,9 @@ public sealed partial class VpnViewModel : ObservableObject
         _syncing = false;
         if (!ListsDirty)
         {
-            foreach (var (options, chosen) in new[] { (ProxyCategories, c.Settings.VpnProxyCategories), (DirectCategories, c.Settings.VpnDirectCategories) })
+            foreach (var (options, chosen) in _categoriesPending
+                         ? Array.Empty<(IReadOnlyList<CategoryOption>, List<string>)>()
+                         : new[] { (ProxyCategories, c.Settings.VpnProxyCategories), (DirectCategories, c.Settings.VpnDirectCategories) })
             {
                 foreach (var o in options)
                 {
@@ -257,11 +278,16 @@ public sealed partial class VpnViewModel : ObservableObject
             ListsDirty = false;
         }
 
-        var targets = c.Settings.GameProfiles
+        var games = c.Settings.GameProfiles
             .Select(p => new QualityTarget($"Игра: {p.Name}",
                 p.ProbeEndpoints.Select(IPEndPoint.Parse).Where(e => TlsPing.IsTlsPort(e.Port)).Take(3).ToList()))
-            .Where(t => t.Endpoints.Count > 0)
             .ToList();
+        var measurable = games.Where(t => t.Endpoints.Count > 0).ToList();
+        var missing = games.Where(t => t.Endpoints.Count == 0).Select(t => t.Title[6..]).ToList();
+        TargetsHint = missing.Count == 0 ? null
+            : $"Для {string.Join(", ", missing)} нет адресов для замера: на странице «Игры» откройте «…» → «Дообучить», запустите запись и сыграйте матч.";
+        // Always something to measure: the general path to big networks near the VPS.
+        var targets = measurable.Concat(GeneralTargets).ToList();
         if (!targets.Select(t => t.Title).SequenceEqual(Targets.Select(t => t.Title)))
         {
             var selected = SelectedTarget?.Title;
@@ -270,6 +296,14 @@ public sealed partial class VpnViewModel : ObservableObject
             SelectedTarget = Targets.FirstOrDefault(t => t.Title == selected) ?? Targets.FirstOrDefault();
         }
     }
+
+    private static readonly QualityTarget[] GeneralTargets =
+    {
+        new("Общий канал: Cloudflare (1.1.1.1)", new[] { IPEndPoint.Parse("1.1.1.1:443"), IPEndPoint.Parse("1.0.0.1:443") }),
+        new("Общий канал: Google (8.8.8.8)", new[] { IPEndPoint.Parse("8.8.8.8:443"), IPEndPoint.Parse("8.8.4.4:443") }),
+    };
+
+    [ObservableProperty] private string? _targetsHint;
 
     // ---------- server ----------
 
@@ -381,9 +415,7 @@ public sealed partial class VpnViewModel : ObservableObject
             return;
         }
         ListsMessage = null;
-        if (await c.SetVpnListsAsync(Programs.ToList(), lines,
-                ProxyCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList(),
-                DirectCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList()))
+        if (await c.SetVpnListsAsync(Programs.ToList(), lines, c.Settings.VpnProxyCategories, c.Settings.VpnDirectCategories))
         {
             ListsDirty = false;
             ListsMessage = "Сохранено.";

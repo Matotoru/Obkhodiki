@@ -205,7 +205,7 @@
           <ui:Card Padding="20" Margin="{StaticResource CardSpacing}">
             <StackPanel>
               <TextBlock FontWeight="SemiBold" Text="Категории" />
-              <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="Готовые списки сайтов и адресов, обновляются раз в неделю." />
+              <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="Готовые списки сайтов и адресов, обновляются раз в неделю. Галочка применяется сразу." />
               <ItemsControl ItemsSource="{Binding ProxyCategories}" ItemTemplate="{StaticResource CategoryTemplate}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -269,6 +269,8 @@
             <ui:TextBox DockPanel.Dock="Right" Width="180" Margin="8,0,0,0" PlaceholderText="или IP:443" Text="{Binding CustomTarget, UpdateSourceTrigger=PropertyChanged}" />
             <ComboBox ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget}" />
           </DockPanel>
+          <TextBlock Margin="0,8,0,0" Style="{StaticResource Caption}" Text="{Binding TargetsHint}"
+                     Visibility="{Binding TargetsHint, Converter={StaticResource NullToVisibility}}" />
 
           <ProgressBar Margin="0,14,0,0" Height="4" IsIndeterminate="True" Visibility="{Binding IsMeasuring, Converter={StaticResource BoolToVisibility}}" />
 

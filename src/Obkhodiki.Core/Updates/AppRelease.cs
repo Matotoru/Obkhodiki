@@ -56,6 +56,12 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.4.2", new[]
+        {
+            "Галочки категорий VPS (Instagram, нейросети, YouTube…) применяются сразу — кнопка «Сохранить» нужна только для программ и сайтов.",
+            "«Качество канала»: всегда можно измерить общий канал до Cloudflare и Google, а для игры без адресов появляется подсказка, как их записать.",
+            "В «Настройках» → «Диагностика» — «Открыть лог VPS» с журналом sing-box.",
+        }),
         new Entry("0.4.1", new[]
         {
             "Подписки с ограничением по устройствам (BuzzVPN и другие панели Remnawave) теперь добавляются: программа сообщает панели постоянный идентификатор этого компьютера.",

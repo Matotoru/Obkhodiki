@@ -97,6 +97,10 @@ public sealed partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private static void OpenLog() => ShellActions.OpenInNotepad(AppPaths.Log);
 
+    /// <summary>sing-box's own log: connection errors to the VPS show up only there.</summary>
+    [RelayCommand]
+    private static void OpenVpnLog() => ShellActions.OpenInNotepad(AppPaths.SingBoxLog);
+
     [RelayCommand]
     private static void OpenUserFolder() => ShellActions.OpenFolder(AppPaths.UserData);
 

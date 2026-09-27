@@ -89,6 +89,16 @@
         </StackPanel>
       </ui:CardAction>
 
+      <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding OpenVpnLogCommand, Source={x:Static vm:ShellViewModel.Current}}">
+        <ui:CardAction.Icon>
+          <ui:SymbolIcon Symbol="Globe24" />
+        </ui:CardAction.Icon>
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Открыть лог VPS" />
+          <TextBlock Style="{StaticResource Caption}" Text="Журнал sing-box: ошибки соединения с сервером видны только в нём." />
+        </StackPanel>
+      </ui:CardAction>
+
       <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding OpenUserFolderCommand, Source={x:Static vm:ShellViewModel.Current}}">
         <ui:CardAction.Icon>
           <ui:SymbolIcon Symbol="Folder24" />
