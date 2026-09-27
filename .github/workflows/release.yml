@@ -1,0 +1,75 @@
+name: Release
+
+# Push a tag like v0.4.0 on a commit of main: tests run, the app is published and attached to a GitHub release.
+# Every installed copy runs this build as admin (self-update), so: actions pinned by commit, the build job
+# only reads the repository, and only the small release job may write.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Check tag
+        id: version
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must look like v1.2.3" }
+          $csproj = [xml](Get-Content src/Obkhodiki.App/Obkhodiki.App.csproj)
+          $projectVersion = ($csproj.Project.PropertyGroup | Where-Object { $_.Version }).Version
+          if ($projectVersion -ne $v) { throw "Tag $v does not match <Version>$projectVersion</Version> in Obkhodiki.App.csproj" }
+          git fetch origin main
+          git merge-base --is-ancestor "${{ github.sha }}" origin/main
+          if ($LASTEXITCODE -ne 0) { throw "The tagged commit is not on main" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test tests/Obkhodiki.Core.Tests -c Release
+
+      - name: Publish
+        run: dotnet publish src/Obkhodiki.App -c Release -r win-x64 --self-contained false -p:DebugType=none -o out
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path out/* -DestinationPath "Obkhodiki-${{ steps.version.outputs.version }}-win-x64.zip"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package
+          path: Obkhodiki-${{ steps.version.outputs.version }}-win-x64.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}"
+          "Obkhodiki-${{ needs.build.outputs.version }}-win-x64.zip"
+          --repo "${{ github.repository }}"
+          --title "Obkhodiki ${{ needs.build.outputs.version }}"
+          --generate-notes

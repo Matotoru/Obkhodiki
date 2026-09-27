@@ -3,8 +3,8 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using ZapretHub.App.Ui;
-using ZapretHub.App.Ui.ViewModels;
+using Obkhodiki.App.Ui;
+using Obkhodiki.App.Ui.ViewModels;
 
 namespace UiPreview;
 
@@ -71,6 +71,34 @@ static class Program
             catch (Exception ex)
             {
                 File.WriteAllText(Path.Combine(outDir, "error.txt"), ex.ToString());
+            }
+            try
+            {
+                // The dialog itself is modal; render its content the way it appears inside it.
+                var host = new Wpf.Ui.Controls.Card
+                {
+                    Width = 520,
+                    Padding = new Thickness(24),
+                    Content = new System.Windows.Controls.StackPanel
+                    {
+                        Children =
+                        {
+                            new System.Windows.Controls.TextBlock { Text = Obkhodiki.App.Ui.WhatsNewDialog.Title, FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 14) },
+                            Obkhodiki.App.Ui.WhatsNewDialog.BuildContent(Obkhodiki.Core.Updates.Changelog.Since("0.3.0", "0.4.0")),
+                        },
+                    },
+                };
+                var popup = new Window { Content = host, SizeToContent = SizeToContent.WidthAndHeight, WindowStyle = WindowStyle.None, Left = -4000, ShowInTaskbar = false, ShowActivated = false };
+                popup.SetResourceReference(Window.BackgroundProperty, "ApplicationBackgroundBrush");
+                popup.SetResourceReference(Window.ForegroundProperty, "TextFillColorPrimaryBrush");
+                popup.Show();
+                await Settle(popup);
+                Save(popup, Path.Combine(outDir, "whatsnew.png"));
+                popup.Close();
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(Path.Combine(outDir, "error-whatsnew.txt"), ex.ToString());
             }
             finally
             {

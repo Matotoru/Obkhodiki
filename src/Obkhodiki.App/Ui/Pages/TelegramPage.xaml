@@ -1,0 +1,37 @@
+<Page
+  x:Class="Obkhodiki.App.Ui.Pages.TelegramPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="Telegram">
+    <StackPanel Margin="{StaticResource PagePadding}">
+      <ui:CardControl Margin="{StaticResource CardSpacing}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="Send24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="TG WS Proxy" />
+            <TextBlock Style="{StaticResource Caption}">
+              <Run Text="Локальный прокси от Flowseal: Telegram идёт через WebSocket. Версия" />
+              <Run Text="{Binding Version, Mode=OneWay}" />
+            </TextBlock>
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ui:ToggleSwitch IsChecked="{Binding Enabled}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" OffContent="Выкл" OnContent="Вкл" />
+      </ui:CardControl>
+
+      <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding ConnectCommand}" IsEnabled="{Binding Enabled}">
+        <ui:CardAction.Icon>
+          <ui:SymbolIcon Symbol="Link24" />
+        </ui:CardAction.Icon>
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Подключить Telegram к прокси" />
+          <TextBlock Style="{StaticResource Caption}" Text="Откроет Telegram с предложением добавить прокси. Нужно один раз." />
+        </StackPanel>
+      </ui:CardAction>
+
+      <ui:InfoBar IsClosable="False" IsOpen="True" Severity="Informational" Title="Как это работает"
+                  Message="Прокси работает от вашего пользователя, без прав администратора. У него есть свой значок в трее и окно настроек; обновления ставятся из Obkhodiki после подтверждения." />
+    </StackPanel>
+</Page>
