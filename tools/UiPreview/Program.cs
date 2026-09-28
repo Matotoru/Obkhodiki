@@ -93,6 +93,21 @@ static class Program
                     }
                     if (Environment.GetEnvironmentVariable("UIPREVIEW_SCROLL") == "1") DumpScroll(window, name, outDir);
                 }
+
+                // The first-run guide, one picture per step.
+                ThemeService.Apply(window, ThemeService.Dark, "cat");
+                var wizard = new WizardWindow(shell) { ShowActivated = false, ShowInTaskbar = false, Left = -4000, Top = 0, WindowStartupLocation = WindowStartupLocation.Manual };
+                wizard.WindowBackdropType = Wpf.Ui.Controls.WindowBackdropType.None;
+                wizard.SetResourceReference(Window.BackgroundProperty, "ApplicationBackgroundBrush");
+                wizard.Show();
+                var wvm = (Obkhodiki.App.Ui.ViewModels.WizardViewModel)wizard.DataContext;
+                for (var step = 0; step < Obkhodiki.App.Ui.ViewModels.WizardViewModel.StepCount; step++)
+                {
+                    wvm.Step = step;
+                    await Settle(wizard);
+                    Save(wizard, Path.Combine(outDir, $"wizard-{step + 1}.png"));
+                }
+                wizard.Close();
             }
             catch (Exception ex)
             {

@@ -140,6 +140,16 @@
         </StackPanel>
       </ui:CardAction>
 
+      <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding OpenWizardCommand}">
+        <ui:CardAction.Icon>
+          <ui:SymbolIcon Symbol="Wand24" />
+        </ui:CardAction.Icon>
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Мастер первого запуска" />
+          <TextBlock Style="{StaticResource Caption}" Text="Стратегия, игры, VPS и оформление — по шагам, заново." />
+        </StackPanel>
+      </ui:CardAction>
+
       <TextBlock Style="{StaticResource SectionTitle}" Text="Перенос настроек" />
       <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding ExportSettingsCommand}">
         <ui:CardAction.Icon>

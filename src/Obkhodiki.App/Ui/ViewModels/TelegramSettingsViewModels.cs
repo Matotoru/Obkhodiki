@@ -192,6 +192,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void OpenWizard()
+    {
+        if (System.Windows.Application.Current?.MainWindow is { } window) WizardWindow.ShowFor(window, _shell);
+    }
+
+    [RelayCommand]
     private async Task BuildReportAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

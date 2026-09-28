@@ -122,7 +122,9 @@ internal sealed class TrayHost : IDisposable
             await _controller.MarkVersionSeenAsync();
             try
             {
-                await WhatsNewDialog.ShowAsync(entries);
+                // A fresh install gets the guide instead of a list of changes it never saw before.
+                if (!usedBefore) WizardWindow.ShowFor(_window, _shell);
+                else await WhatsNewDialog.ShowAsync(entries);
             }
             catch (Exception ex)
             {
