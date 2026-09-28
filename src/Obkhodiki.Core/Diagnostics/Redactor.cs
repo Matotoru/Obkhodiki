@@ -3,9 +3,10 @@ using System.Text.RegularExpressions;
 namespace Obkhodiki.Core.Diagnostics;
 
 /// <summary>
-/// Removes credentials from text that goes into a diagnostics report the user will send to someone: share-link
-/// passwords and UUIDs, subscription paths and query tokens, bearer secrets. Host names stay (they are needed
-/// to understand a problem and are not a key to anything).
+/// Removes what must not end up in a diagnostics report the user may post publicly (e.g. a GitHub issue):
+/// share-link passwords and UUIDs, subscription paths and query tokens, bearer secrets, the Windows user name in
+/// paths, and the user's own VPS servers — a published server address is easy to block, so each becomes a stable
+/// tag ("srv-1a2b") that still shows which server a log line is about.
 /// </summary>
 public static partial class Redactor
 {
@@ -26,20 +27,41 @@ public static partial class Redactor
     [GeneratedRegex(@"(?i)(Bearer\s+)[A-Za-z0-9._\-]+")]
     private static partial Regex Bearer();
 
+    // Legacy Shadowsocks links: ss://BASE64(method:password@host:port) — everything, password included, is encoded.
+    [GeneratedRegex(@"(?i)\bss://[A-Za-z0-9+/_=\-]{8,}(?=[\s#""'<>]|$)")]
+    private static partial Regex LegacySs();
+
+    // C:\Users\<name>\… (also with forward slashes; names may contain spaces when a path follows) → %USERPROFILE%\…
+    [GeneratedRegex(@"(?i)\b[A-Z]:[\\/]Users[\\/](?:[^\\/\r\n""'<>:*?|]+(?=[\\/])|[^\\/\s""'<>:*?|]+)")]
+    private static partial Regex UserProfile();
+
     /// <summary>Public URLs that are safe and useful to keep whole (releases, docs).</summary>
     private static readonly string[] KeepHosts = { "github.com", "api.github.com", "raw.githubusercontent.com", "objects.githubusercontent.com" };
 
-    public static string Redact(string text)
+    /// <summary>Stable short tag for a private server name or address.</summary>
+    public static string ServerTag(string host) =>
+        "srv-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(host.Trim().ToLowerInvariant())))[..4].ToLowerInvariant();
+
+    /// <param name="privateHosts">The user's VPS servers and subscription host: names and resolved addresses.</param>
+    public static string Redact(string text, IEnumerable<string>? privateHosts = null)
     {
-        var result = UserInfo().Replace(text, "$1***@");
+        var result = LegacySs().Replace(text, "ss://***");
+        result = UserInfo().Replace(result, "$1***@");
         result = UrlPath().Replace(result, m =>
         {
-            var host = new Uri(m.Groups[1].Value).Host;
-            return KeepHosts.Contains(host, StringComparer.OrdinalIgnoreCase) || m.Groups[2].Value == "/" ? m.Value : m.Groups[1].Value + "/***";
+            // A malformed "URL" in a log line must not stop the whole report: mask it.
+            if (!Uri.TryCreate(m.Groups[1].Value, UriKind.Absolute, out var uri)) return "https://***";
+            return KeepHosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase) || m.Groups[2].Value == "/" ? m.Value : m.Groups[1].Value + "/***";
         });
         result = Uuid().Replace(result, "********-****-****-****-************");
         result = KeyValue().Replace(result, "$1$2***");
         result = Bearer().Replace(result, "$1***");
+        result = UserProfile().Replace(result, "%USERPROFILE%");
+        // Longest first, so "a.b.example.com" is not half-replaced by "example.com".
+        foreach (var host in (privateHosts ?? Array.Empty<string>()).Where(h => h.Length >= 3).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(h => h.Length))
+        {
+            result = Regex.Replace(result, @"(?<![A-Za-z0-9.\-])" + Regex.Escape(host) + @"(?![A-Za-z0-9\-]|\.[A-Za-z0-9])", ServerTag(host), RegexOptions.IgnoreCase);
+        }
         return result;
     }
 }

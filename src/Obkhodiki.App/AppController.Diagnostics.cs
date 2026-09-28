@@ -76,11 +76,12 @@ internal sealed partial class AppController
         progress?.Report("Логи…");
         using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
         {
+            var privateHosts = await PrivateHostsAsync();
             void Add(string name, string text)
             {
                 var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
                 using var w = new StreamWriter(entry.Open(), new UTF8Encoding(false));
-                w.Write(Redactor.Redact(text));
+                w.Write(Redactor.Redact(text, privateHosts));
             }
             Add("report.txt", report.ToString());
             Add("settings.json", SettingsBundle.Create(Settings, new Dictionary<string, string>(), new Dictionary<string, string>(), null,
@@ -132,6 +133,34 @@ internal sealed partial class AppController
             }
             if (vpnProbe is null) line("(VPS не запущен — проверка через VPS пропущена)");
         }
+    }
+
+    /// <summary>
+    /// The user's VPS servers (current and saved subscriptions) and subscription hosts, by name and by address —
+    /// sing-box logs show the resolved IP, not the name.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> PrivateHostsAsync()
+    {
+        var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var source in new[] { VpnSourceStore.Load() }.Concat(VpnSourceStore.LoadSaved()))
+        {
+            if (source is null) continue;
+            if (source.SubscriptionHost is { } sub) hosts.Add(sub);
+            foreach (var s in source.Servers()) hosts.Add(s.Server.Host);
+        }
+        var names = hosts.Where(h => !IPAddress.TryParse(h, out _)).ToList();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        foreach (var name in names)
+        {
+            try
+            {
+                foreach (var ip in await Dns.GetHostAddressesAsync(name, cts.Token)) hosts.Add(ip.ToString());
+            }
+            catch (Exception ex) when (ex is System.Net.Sockets.SocketException or OperationCanceledException or ArgumentException)
+            {
+            }
+        }
+        return hosts.ToList();
     }
 
     private static IEnumerable<string> RunningServices()
