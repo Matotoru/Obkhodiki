@@ -27,8 +27,9 @@ public static partial class Redactor
     [GeneratedRegex(@"(?i)(Bearer\s+)[A-Za-z0-9._\-]+")]
     private static partial Regex Bearer();
 
-    // Legacy Shadowsocks links: ss://BASE64(method:password@host:port) — everything, password included, is encoded.
-    [GeneratedRegex(@"(?i)\bss://[A-Za-z0-9+/_=\-]{8,}(?=[\s#""'<>]|$)")]
+    // Legacy Shadowsocks links ss://BASE64(method:password@host:port) and vmess://BASE64(JSON with the UUID):
+    // everything, the secret included, is encoded.
+    [GeneratedRegex(@"(?i)\b(ss|vmess)://[A-Za-z0-9+/_=\-]{8,}(?=[\s#""'<>]|$)")]
     private static partial Regex LegacySs();
 
     // C:\Users\<name>\… (also with forward slashes; names may contain spaces when a path follows) → %USERPROFILE%\…
@@ -45,7 +46,7 @@ public static partial class Redactor
     /// <param name="privateHosts">The user's VPS servers and subscription host: names and resolved addresses.</param>
     public static string Redact(string text, IEnumerable<string>? privateHosts = null)
     {
-        var result = LegacySs().Replace(text, "ss://***");
+        var result = LegacySs().Replace(text, "$1://***");
         result = UserInfo().Replace(result, "$1***@");
         result = UrlPath().Replace(result, m =>
         {

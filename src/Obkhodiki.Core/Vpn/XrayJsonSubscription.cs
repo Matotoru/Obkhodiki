@@ -100,7 +100,13 @@ public static class XrayJsonSubscription
                 break;
             }
             case "vmess":
-                throw new FormatException("VMess пока не поддерживается.");
+            {
+                var server = First(settings, "vnext");
+                var user = First(server, "users");
+                AddStream(stream, q);
+                return VmessShareLink(Req(server, "address"), Int(server, "port"), Req(user, "id"),
+                    Int(user, "alterId", 0), Str(user, "security") ?? "auto", q, name);
+            }
             default:
                 throw new FormatException($"Протокол {protocol} из JSON-подписки пока не поддерживается.");
         }
@@ -110,6 +116,34 @@ public static class XrayJsonSubscription
         var fragment = name is null ? "" : "#" + Uri.EscapeDataString(name);
         var scheme = protocol == "shadowsocks" ? "ss" : protocol;
         return $"{scheme}://{Uri.EscapeDataString(userInfo)}@{host}:{port}{query}{fragment}";
+    }
+
+    /// <summary>A vmess:// link in the v2rayN JSON format, built from an Xray outbound (the VMess parser validates it).</summary>
+    private static string VmessShareLink(string address, int port, string id, int alterId, string cipher, List<(string Key, string Value)> q, string? name)
+    {
+        string? Q(string key) => q.FirstOrDefault(p => p.Key == key).Value;
+        if (Q("security") == "reality") throw new FormatException("VMess с Reality не поддерживается.");
+        var network = Q("type") ?? "tcp";
+        var json = new System.Text.Json.Nodes.JsonObject
+        {
+            ["v"] = "2",
+            ["ps"] = name ?? "",
+            ["add"] = address,
+            ["port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["id"] = id,
+            ["aid"] = alterId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["scy"] = cipher,
+            ["net"] = network,
+            ["type"] = Q("headerType") ?? "none",
+            ["host"] = Q("host") ?? "",
+            ["path"] = (network == "grpc" ? Q("serviceName") : Q("path")) ?? "",
+            ["tls"] = Q("security") == "tls" ? "tls" : "",
+            ["sni"] = Q("sni") ?? "",
+            ["alpn"] = Q("alpn") ?? "",
+            ["fp"] = Q("fp") ?? "",
+        };
+        if (Q("allowInsecure") == "1") json["allowInsecure"] = "1";
+        return "vmess://" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString()));
     }
 
     /// <summary>Xray streamSettings → the query parameters of a share link (the parsers validate every value).</summary>
@@ -174,6 +208,8 @@ public static class XrayJsonSubscription
         e is { ValueKind: JsonValueKind.Object } o && o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     private static string Req(JsonElement e, string name) => Str(e, name) ?? throw new FormatException($"В сервере нет поля {name}.");
+
+    private static int Int(JsonElement e, string name, int fallback) => e.TryGetProperty(name, out _) ? Int(e, name) : fallback;
 
     private static int Int(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i) ? i

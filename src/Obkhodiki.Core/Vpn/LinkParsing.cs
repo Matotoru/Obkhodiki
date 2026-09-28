@@ -32,8 +32,8 @@ public static class ProxyLinks
             "vless" => VlessLink.Parse(raw),
             "trojan" => TrojanLink.Parse(raw),
             "ss" => ShadowsocksLink.Parse(raw),
-            "vmess" => throw new FormatException("VMess пока не поддерживается."),
-            _ => throw new FormatException("Поддерживаются ссылки vless://, hysteria2://, trojan:// и ss://"),
+            "vmess" => VmessLink.Parse(raw),
+            _ => throw new FormatException("Поддерживаются ссылки vless://, vmess://, hysteria2://, trojan:// и ss://"),
         };
     }
 

@@ -104,7 +104,7 @@
         <StackPanel>
           <TextBlock FontSize="16" FontWeight="SemiBold" Text="Подписка или сервер" />
           <TextBlock Margin="0,4,0,12" Style="{StaticResource Caption}"
-                     Text="Вставьте ссылку подписки из 3x-ui (https://…/sub/…) или ссылку одного сервера: vless://, hysteria2://, trojan://, ss://. Она хранится зашифрованной в папке, доступной только администраторам." />
+                     Text="Вставьте ссылку подписки из 3x-ui (https://…/sub/…) или ссылку одного сервера: vless://, vmess://, hysteria2://, trojan://, ss://. Она хранится зашифрованной в папке, доступной только администраторам." />
           <TextBlock Margin="0,0,0,12" Style="{StaticResource Caption}" Text="Текущая подписка не удалится: она останется в «Сохранённых», и на неё можно будет переключиться."
                      Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}" />
           <ui:PasswordBox PlaceholderText="https://…/sub/…  или  vless://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
