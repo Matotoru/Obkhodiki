@@ -69,3 +69,36 @@ public class GameCoverTests
         Assert.All(urls, u => Assert.Contains(".steamstatic.com/", u));
     }
 }
+
+public class SdrConfigTests
+{
+    [Fact]
+    public void Parse_RelaysAndPortUnion()
+    {
+        var json = """
+        {"revision":1,"pops":{
+          "ams":{"desc":"Amsterdam","relays":[{"ipv4":"155.133.248.36","port_range":[27015,27060]},{"ipv4":"155.133.248.37","port_range":[27015,27060]}]},
+          "sto":{"desc":"Stockholm","relays":[{"ipv4":"162.254.197.36","port_range":[27015,27140]},{"ipv4":"bad","port_range":[1,2]},{"ipv4":"10.0.0.0/8","port_range":[1,2]},{"ipv4":"1.2.3.4","port_range":[70000,1]}]},
+          "alias":{"desc":"no relays"}}}
+        """;
+
+        var (addresses, ports) = GameCatalog.ParseSdrConfig(json);
+
+        Assert.Equal(new[] { "155.133.248.36/32", "155.133.248.37/32", "162.254.197.36/32" }, addresses);
+        Assert.Equal("27015-27140", ports);
+    }
+
+    [Fact]
+    public void Parse_NoRelays_Throws()
+    {
+        Assert.Throws<FormatException>(() => GameCatalog.ParseSdrConfig("""{"pops":{}}"""));
+        Assert.Throws<FormatException>(() => GameCatalog.ParseSdrConfig("""{"success":false}"""));
+    }
+
+    [Fact]
+    public void ValveGamesAndWardogs_UseSdr()
+    {
+        Assert.All(new[] { "wardogs", "cs2", "dota2", "deadlock" }, id => Assert.True(GameCatalog.Find(id)!.UsesSdr, id));
+        Assert.False(GameCatalog.Find("valorant")!.UsesSdr);
+    }
+}

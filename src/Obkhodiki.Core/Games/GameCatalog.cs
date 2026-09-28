@@ -7,6 +7,8 @@ namespace Obkhodiki.Core.Games;
 /// <param name="Asns">Networks the game's servers live in; their announced prefixes become the address list.
 /// Empty: the servers are on shared clouds or community hosts, so the addresses are recorded during a match.</param>
 /// <param name="SteamAppId">For the cover picture.</param>
+/// <param name="UsesSdr">Talks to Steam Datagram Relay: the exact relay addresses and ports come from Steam's
+/// GetSDRConfig for this app (<see cref="Asns"/> is the fallback when Steam does not answer).</param>
 /// <param name="Colors">Two brand colours ("#RRGGBB") for the drawn card when there is no picture.</param>
 public sealed record GameCatalogEntry(
     string Id,
@@ -17,7 +19,8 @@ public sealed record GameCatalogEntry(
     IReadOnlyList<int> Asns,
     int? SteamAppId,
     string Publisher,
-    (string From, string To) Colors)
+    (string From, string To) Colors,
+    bool UsesSdr = false)
 {
     public bool NeedsRecording => Asns.Count == 0;
 }
@@ -33,10 +36,10 @@ public static class GameCatalog
 
     public static IReadOnlyList<GameCatalogEntry> Entries { get; } = new GameCatalogEntry[]
     {
-        new("wardogs", "WARDOGS", new[] { "WardogsClient-Win64-Shipping.exe" }, "", SdrUdp, new[] { ValveAsn }, 1867240, "Bulkhead", ("#3B4A2A", "#C9A227")),
-        new("cs2", "Counter-Strike 2", new[] { "cs2.exe" }, "", SdrUdp, new[] { ValveAsn }, 730, "Valve", ("#1B2838", "#DE9B35")),
-        new("dota2", "Dota 2", new[] { "dota2.exe" }, "", SdrUdp, new[] { ValveAsn }, 570, "Valve", ("#1A0B0B", "#B8321E")),
-        new("deadlock", "Deadlock", new[] { "project8.exe", "deadlock.exe" }, "", SdrUdp, new[] { ValveAsn }, 1422450, "Valve", ("#1E1A14", "#C8A26B")),
+        new("wardogs", "WARDOGS", new[] { "WardogsClient-Win64-Shipping.exe" }, "", SdrUdp, new[] { ValveAsn }, 1867240, "Bulkhead", ("#3B4A2A", "#C9A227"), UsesSdr: true),
+        new("cs2", "Counter-Strike 2", new[] { "cs2.exe" }, "", SdrUdp, new[] { ValveAsn }, 730, "Valve", ("#1B2838", "#DE9B35"), UsesSdr: true),
+        new("dota2", "Dota 2", new[] { "dota2.exe" }, "", SdrUdp, new[] { ValveAsn }, 570, "Valve", ("#1A0B0B", "#B8321E"), UsesSdr: true),
+        new("deadlock", "Deadlock", new[] { "project8.exe", "deadlock.exe" }, "", SdrUdp, new[] { ValveAsn }, 1422450, "Valve", ("#1E1A14", "#C8A26B"), UsesSdr: true),
         new("valorant", "VALORANT", new[] { "VALORANT-Win64-Shipping.exe" }, "", "7000-8000,8180-8181", new[] { RiotAsn }, null, "Riot Games", ("#0F1923", "#FF4655")),
         new("lol", "League of Legends", new[] { "League of Legends.exe" }, "", "5000-5500", new[] { RiotAsn }, null, "Riot Games", ("#0A1428", "#C8AA6E")),
         new("apex", "Apex Legends", new[] { "r5apex_dx12.exe", "r5apex.exe" }, "", "", Array.Empty<int>(), 1172470, "Respawn / EA", ("#2B0B0B", "#DA292A")),
@@ -52,6 +55,43 @@ public static class GameCatalog
     /// <summary>The catalog entry a profile belongs to: same id, or the same game executable.</summary>
     public static GameCatalogEntry? For(GameProfile profile) =>
         Find(profile.Id) ?? Entries.FirstOrDefault(e => profile.ProcessName is { } exe && e.ProcessNames.Contains(exe, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>Steam's relay list for one app (public, no key).</summary>
+    public static string SdrConfigUrl(int steamAppId) => $"https://api.steampowered.com/ISteamApps/GetSDRConfig/v1/?appid={steamAppId}";
+
+    /// <summary>Relay addresses (/32) and the union of their UDP port ranges from a GetSDRConfig answer.</summary>
+    /// <exception cref="FormatException">Not a usable relay list.</exception>
+    public static (IReadOnlyList<string> Addresses, string UdpPorts) ParseSdrConfig(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("pops", out var pops) || pops.ValueKind != JsonValueKind.Object)
+        {
+            throw new FormatException("Unexpected GetSDRConfig answer.");
+        }
+        var addresses = new List<string>();
+        var ports = PortSet.Empty;
+        foreach (var pop in pops.EnumerateObject())
+        {
+            if (pop.Value.ValueKind != JsonValueKind.Object || !pop.Value.TryGetProperty("relays", out var relays) || relays.ValueKind != JsonValueKind.Array) continue;
+            foreach (var relay in relays.EnumerateArray())
+            {
+                if (relay.ValueKind != JsonValueKind.Object || !relay.TryGetProperty("ipv4", out var ip) || ip.GetString() is not { } text
+                    || Vpn.SingBoxConfig.NormalizeCidr(text) is not { } cidr || !cidr.EndsWith("/32", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (!relay.TryGetProperty("port_range", out var range) || range.ValueKind != JsonValueKind.Array || range.GetArrayLength() != 2
+                    || !range[0].TryGetInt32(out var from) || !range[1].TryGetInt32(out var to) || from < 1 || to > 65535 || to < from)
+                {
+                    continue;
+                }
+                addresses.Add(cidr);
+                ports = ports.Union(PortSet.Parse($"{from}-{to}"));
+            }
+        }
+        if (addresses.Count == 0) throw new FormatException("GetSDRConfig has no relays.");
+        return (addresses.Distinct().ToList(), ports.ToString());
+    }
 
     /// <summary>RIPEstat "announced-prefixes" for one network.</summary>
     public static string PrefixesUrl(int asn) => $"https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS{asn}";

@@ -113,6 +113,8 @@ internal sealed partial class AppController : IDisposable
             {
                 await CheckForUpdateAsync(userInitiated: false);
             }
+            // After bypass is up (the list is read at the next start, so nothing is restarted for it).
+            await RefreshSdrAddressesAsync();
             if (Settings.CheckUpdatesOnStart)
             {
                 await CheckTgUpdateAsync(userInitiated: false);

@@ -124,19 +124,7 @@ internal sealed partial class AppController
         await Serialized($"Добавление {entry.Name}…", silentErrors: false, async () =>
         {
             if (Settings.GameProfiles.Any(p => GameCatalog.For(p)?.Id == entry.Id)) throw new InvalidOperationException($"«{entry.Name}» уже добавлена.");
-            var prefixes = new List<string>();
-            foreach (var asn in entry.Asns)
-            {
-                try
-                {
-                    prefixes.AddRange(await DownloadThroughAnyPathAsync(async (client, ct) =>
-                        GameCatalog.ParsePrefixes(await client.GetStringAsync(GameCatalog.PrefixesUrl(asn), ct))));
-                }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException or System.Text.Json.JsonException or InvalidDataException)
-                {
-                    throw new InvalidOperationException($"Не удалось получить адреса серверов {entry.Publisher} (RIPE): {ex.Message}. Попробуйте позже или запишите игру вручную.", ex);
-                }
-            }
+            var (prefixes, udpPorts, origin) = await CatalogAddressesAsync(entry);
 
             var profile = new GameProfile
             {
@@ -144,21 +132,15 @@ internal sealed partial class AppController
                 Name = entry.Name,
                 ProcessName = runningExe ?? entry.ProcessNames[0],
                 TcpPorts = entry.TcpPorts,
-                UdpPorts = entry.UdpPorts,
+                UdpPorts = udpPorts,
                 Route = GameRoute.Direct,
                 Enabled = prefixes.Count > 0,
             };
             Directory.CreateDirectory(AppPaths.GamesDir);
-            var content = new StringBuilder()
-                .AppendLine($"# {entry.Name}: game server addresses (one IP or CIDR per line)")
-                .AppendLine(entry.Asns.Count > 0 ? $"# From the announced networks of {string.Join(", ", entry.Asns.Select(a => "AS" + a))} (RIPEstat), {DateTime.Now:yyyy-MM-dd}" : "# Record a match to fill this list")
-                .AppendJoin(Environment.NewLine, prefixes)
-                .AppendLine()
-                .ToString();
-            await File.WriteAllTextAsync(GameIpsetPath(profile.Id), content);
+            await File.WriteAllTextAsync(GameIpsetPath(profile.Id), CatalogAddressFile(entry, prefixes, origin));
             Settings.GameProfiles.Add(profile);
             _settingsStore.Save(Settings);
-            Log.Info($"Catalog game {entry.Id} added as {profile.Id}: {prefixes.Count} networks");
+            Log.Info($"Catalog game {entry.Id} added as {profile.Id}: {prefixes.Count} addresses from {origin}");
             added = profile;
 
             await ReapplyVpnAfterProfileChangeAsync();
@@ -166,5 +148,79 @@ internal sealed partial class AppController
         });
         if (added is { Enabled: true }) Notify?.Invoke(entry.Name, "Готово: игра добавлена и включена.", ToolTipIcon.Info);
         return added;
+    }
+
+    /// <summary>
+    /// Addresses of a catalog game: Steam's exact relay list for SDR games (falling back to the publisher's network),
+    /// the announced prefixes of the publisher's network for the others, nothing for games that need recording.
+    /// </summary>
+    private async Task<(List<string> Addresses, string UdpPorts, string Origin)> CatalogAddressesAsync(GameCatalogEntry entry)
+    {
+        if (entry.UsesSdr && entry.SteamAppId is { } app)
+        {
+            try
+            {
+                var (relays, ports) = await DownloadThroughAnyPathAsync(async (client, ct) =>
+                    GameCatalog.ParseSdrConfig(await client.GetStringAsync(GameCatalog.SdrConfigUrl(app), ct)));
+                return (relays.ToList(), ports, "Steam GetSDRConfig");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException or System.Text.Json.JsonException or InvalidDataException)
+            {
+                Log.Info($"GetSDRConfig for {app} failed, using the publisher's network: {ex.Message}");
+            }
+        }
+        var prefixes = new List<string>();
+        foreach (var asn in entry.Asns)
+        {
+            try
+            {
+                prefixes.AddRange(await DownloadThroughAnyPathAsync(async (client, ct) =>
+                    GameCatalog.ParsePrefixes(await client.GetStringAsync(GameCatalog.PrefixesUrl(asn), ct))));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException or System.Text.Json.JsonException or InvalidDataException)
+            {
+                throw new InvalidOperationException($"Не удалось получить адреса серверов {entry.Publisher} (RIPE): {ex.Message}. Попробуйте позже или запишите игру вручную.", ex);
+            }
+        }
+        return (prefixes, entry.UdpPorts, entry.Asns.Count > 0 ? string.Join(", ", entry.Asns.Select(a => "AS" + a)) + " (RIPEstat)" : "recording");
+    }
+
+    private static string CatalogAddressFile(GameCatalogEntry entry, IReadOnlyList<string> addresses, string origin) => new StringBuilder()
+        .AppendLine($"# {entry.Name}: game server addresses (one IP or CIDR per line)")
+        .AppendLine(addresses.Count > 0 ? $"# From {origin}, {DateTime.Now:yyyy-MM-dd}" : "# Record a match to fill this list")
+        .AppendJoin(Environment.NewLine, addresses)
+        .AppendLine()
+        .ToString();
+
+    private static readonly TimeSpan SdrRefreshAge = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// Valve moves relays now and then: refreshes the lists of SDR games added from the catalog once a week.
+    /// The new list is used from the next bypass start (a running winws is not restarted for it).
+    /// </summary>
+    private async Task RefreshSdrAddressesAsync()
+    {
+        foreach (var profile in Settings.GameProfiles.ToList())
+        {
+            if (GameCatalog.For(profile) is not { UsesSdr: true, SteamAppId: { } app } entry) continue;
+            var path = GameIpsetPath(profile.Id);
+            if (!File.Exists(path) || DateTime.Now - File.GetLastWriteTime(path) < SdrRefreshAge) continue;
+            // Only lists this app wrote: a list the user recorded or edited by hand is theirs.
+            var firstLines = File.ReadLines(path).Take(2).ToList();
+            if (firstLines.Count < 2 || !firstLines[1].StartsWith("# From Steam GetSDRConfig", StringComparison.Ordinal)) continue;
+            try
+            {
+                var (relays, ports) = await DownloadThroughAnyPathAsync(async (client, ct) =>
+                    GameCatalog.ParseSdrConfig(await client.GetStringAsync(GameCatalog.SdrConfigUrl(app), ct)));
+                await File.WriteAllTextAsync(path, CatalogAddressFile(entry, relays, "Steam GetSDRConfig"));
+                profile.UdpPorts = PortSet.Parse(profile.UdpPorts).Union(PortSet.Parse(ports)).ToString();
+                _settingsStore.Save(Settings);
+                Log.Info($"SDR relays of {profile.Id} refreshed: {relays.Count} addresses, UDP {profile.UdpPorts}");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException or System.Text.Json.JsonException or InvalidDataException or IOException)
+            {
+                Log.Info($"SDR refresh for {profile.Id} failed: {ex.Message}");
+            }
+        }
     }
 }
