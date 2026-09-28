@@ -162,6 +162,16 @@
       </ui:CardAction>
 
       <TextBlock Style="{StaticResource SectionTitle}" Text="Диагностика" />
+      <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding BuildReportCommand}">
+        <ui:CardAction.Icon>
+          <ui:SymbolIcon Symbol="DocumentBulletList24" />
+        </ui:CardAction.Icon>
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Собрать отчёт" />
+          <TextBlock Style="{StaticResource Caption}"
+                     Text="Один zip-файл для того, кто помогает разобраться: состояние, проверка сайтов напрямую и через VPS, логи. Пароли, ключи и ссылки подписок вычищаются." />
+        </StackPanel>
+      </ui:CardAction>
       <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding OpenLogCommand, Source={x:Static vm:ShellViewModel.Current}}">
         <ui:CardAction.Icon>
           <ui:SymbolIcon Symbol="Document24" />

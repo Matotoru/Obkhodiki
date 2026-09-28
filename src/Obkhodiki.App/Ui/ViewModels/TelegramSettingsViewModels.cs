@@ -192,6 +192,26 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task BuildReportAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Сохранить отчёт Obkhodiki",
+            FileName = $"obkhodiki-report-{DateTime.Now:yyyyMMdd-HHmm}.zip",
+            Filter = "Архив (*.zip)|*.zip",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+        };
+        if (dialog.ShowDialog() != true || _shell.Controller is not { } c) return;
+        if (File.Exists(dialog.FileName)) File.Delete(dialog.FileName);
+        await _shell.RunAsync(ctl => ctl.BuildDiagnosticsAsync(dialog.FileName, null));
+        if (File.Exists(dialog.FileName))
+        {
+            _shell.AddEvent("Отчёт готов", Path.GetFileName(dialog.FileName), EventKind.Success);
+            ShellActions.ShowFile(dialog.FileName);
+        }
+    }
+
+    [RelayCommand]
     private async Task ExportSettingsAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

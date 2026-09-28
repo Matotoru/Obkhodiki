@@ -122,6 +122,16 @@ internal static class ShellActions
         });
     }
 
+    /// <summary>Opens Explorer with <paramref name="file"/> selected.</summary>
+    public static void ShowFile(string file)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(AppPaths.WindowsTool("explorer.exe"))
+        {
+            ArgumentList = { "/select," + file },
+            UseShellExecute = false,
+        });
+    }
+
     public static void OpenFolder(string path)
     {
         Directory.CreateDirectory(path);
