@@ -162,6 +162,30 @@ public sealed partial class GameCardViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ShareAsync()
+    {
+        var safeName = string.Concat(Name.Where(c => !Path.GetInvalidFileNameChars().Contains(c))).Trim();
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = $"Поделиться «{Name}»",
+            FileName = (safeName.Length > 0 ? safeName : Id) + GameShare.FileExtension,
+            Filter = $"Игра Obkhodiki (*{GameShare.FileExtension})|*{GameShare.FileExtension}",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+        };
+        if (dialog.ShowDialog() != true || _shell.Controller is not { } c) return;
+        try
+        {
+            await c.ExportGameAsync(Id, dialog.FileName);
+            _shell.AddEvent(Name, "Профиль сохранён в файл — отправьте его другу, он загрузит его на странице «Игры».", EventKind.Success);
+            ShellActions.ShowFile(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _shell.AddEvent(Name, "Не удалось сохранить: " + ex.Message, EventKind.Error);
+        }
+    }
+
+    [RelayCommand]
     private void RemoveCover()
     {
         _shell.Controller?.RemoveCustomCover(Id);
@@ -226,6 +250,36 @@ public sealed partial class GamesViewModel : ObservableObject
         _statsTimer.Tick += (_, _) => UpdateStats();
         Profiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProfiles));
         Catalog = GameCatalog.Entries.Select(e => new CatalogCardViewModel(this, e)).ToList();
+    }
+
+    [RelayCommand]
+    private async Task ImportGameAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Загрузить игру",
+            Filter = $"Игра Obkhodiki (*{GameShare.FileExtension})|*{GameShare.FileExtension}|Все файлы (*.*)|*.*",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dialog.ShowDialog() != true || _shell.Controller is not { } c) return;
+        GameShare share;
+        try
+        {
+            share = await AppController.ReadGameFileAsync(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
+        {
+            _shell.AddEvent("Загрузка игры", ex.Message, EventKind.Error);
+            return;
+        }
+        var lines = share.Addresses.Split('\n').Count(l => l.Length > 0 && !l.StartsWith('#'));
+        var existing = c.ExistingFor(share);
+        var text = $"«{share.Profile.Name}»: {share.Profile.ProcessName ?? "процесс не указан"}, адресов {lines}." + Environment.NewLine + Environment.NewLine +
+                   (existing is null ? "Игра добавится выключенной — включите её переключателем на карточке."
+                                     : $"У вас уже есть «{existing.Name}»: её порты и адреса заменятся на присланные.");
+        if (!await UiDialogs.ConfirmAsync("Загрузить игру", text, existing is null ? "Добавить" : "Заменить")) return;
+        await _shell.RunAsync(ctl => ctl.ImportGameAsync(share));
+        _shell.Refresh();
     }
 
     internal async Task AddFromCatalogAsync(CatalogCardViewModel card)

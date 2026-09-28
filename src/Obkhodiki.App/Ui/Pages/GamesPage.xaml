@@ -7,10 +7,13 @@
     <StackPanel Margin="{StaticResource PagePadding}">
 
       <Grid Margin="0,0,0,12">
-        <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center" Margin="0,0,200,0"
+        <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center" Margin="0,0,300,0"
                    Text="Профиль игры применяет правила обхода только к её серверам — остальные сервисы не затрагиваются. Маршрут решает, идёт игра напрямую или через VPS." />
-        <ui:Button HorizontalAlignment="Right" Appearance="Primary" Command="{Binding AddGameCommand}" Icon="{ui:SymbolIcon Add24}" Content="Добавить игру"
-                   Visibility="{Binding IsLearningOpen, Converter={StaticResource InverseBoolToVisibility}}" />
+        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                    Visibility="{Binding IsLearningOpen, Converter={StaticResource InverseBoolToVisibility}}">
+          <ui:Button Margin="0,0,8,0" Command="{Binding ImportGameCommand}" Icon="{ui:SymbolIcon ArrowImport24}" Content="Из файла" ToolTip="Загрузить игру, которой поделился друг" />
+          <ui:Button Appearance="Primary" Command="{Binding AddGameCommand}" Icon="{ui:SymbolIcon Add24}" Content="Записать игру" />
+        </StackPanel>
       </Grid>
 
       <!-- Learning panel: shown while adding or relearning a game. -->
@@ -129,6 +132,7 @@
                     <ContextMenu>
                       <MenuItem Header="Дообучить (записать ещё)" Command="{Binding RelearnCommand}" />
                       <MenuItem Header="Открыть список адресов" Command="{Binding OpenAddressesCommand}" />
+                      <MenuItem Header="Поделиться…" Command="{Binding ShareCommand}" />
                       <MenuItem Header="Своя картинка…" Command="{Binding ChooseCoverCommand}" />
                       <MenuItem Header="Убрать свою картинку" Command="{Binding RemoveCoverCommand}"
                                 Visibility="{Binding HasCustomCover, Converter={StaticResource BoolToVisibility}}" />

@@ -87,7 +87,7 @@ public sealed class SettingsBundle
     }
 
     /// <summary>A game's address list keeps comments and valid IP/CIDR lines only.</summary>
-    private static string OnlyAddresses(string text) => string.Join('\n', text.Split('\n')
+    internal static string OnlyAddresses(string text) => string.Join('\n', text.Split('\n')
         .Select(l => l.Trim())
         .Where(l => l.Length > 0 && (l.StartsWith('#') || Vpn.SingBoxConfig.NormalizeCidr(l) is not null)));
 }

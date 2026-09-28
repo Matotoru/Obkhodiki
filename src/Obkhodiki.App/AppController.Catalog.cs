@@ -192,6 +192,50 @@ internal sealed partial class AppController
         .AppendLine()
         .ToString();
 
+    public async Task ExportGameAsync(string id, string path)
+    {
+        var profile = Settings.GameProfiles.FirstOrDefault(p => p.Id == id) ?? throw new InvalidOperationException("Профиль не найден.");
+        var file = GameIpsetPath(id);
+        var addresses = File.Exists(file) ? await File.ReadAllTextAsync(file) : "";
+        await File.WriteAllTextAsync(path, GameShare.Create(profile, addresses, SelfUpdate.CurrentVersion).Serialize());
+        Log.Info($"Game profile {id} exported to {path}");
+    }
+
+    public static async Task<GameShare> ReadGameFileAsync(string path)
+    {
+        if (new FileInfo(path).Length > GameShare.MaxFileBytes) throw new FormatException("Файл слишком большой для профиля игры.");
+        return GameShare.Parse(await File.ReadAllTextAsync(path));
+    }
+
+    /// <summary>The profile an imported game would replace: same id, or the same catalog game.</summary>
+    public GameProfile? ExistingFor(GameShare share) =>
+        Settings.GameProfiles.FirstOrDefault(p => p.Id == share.Profile.Id)
+        ?? (GameCatalog.For(share.Profile) is { } entry ? Settings.GameProfiles.FirstOrDefault(p => GameCatalog.For(p)?.Id == entry.Id) : null);
+
+    /// <summary>Adds the shared game, or replaces the matching one (keeping whether it is switched on).</summary>
+    public Task ImportGameAsync(GameShare share) => Serialized($"Загрузка {share.Profile.Name}…", silentErrors: false, async () =>
+    {
+        var profile = share.Profile;
+        var existing = ExistingFor(share);
+        if (existing is not null)
+        {
+            profile.Id = existing.Id;
+            profile.Enabled = existing.Enabled;
+            Settings.GameProfiles[Settings.GameProfiles.IndexOf(existing)] = profile;
+        }
+        else
+        {
+            profile.Id = GameProfiles.MakeId(profile.Id, Settings.GameProfiles.Select(p => p.Id));
+            Settings.GameProfiles.Add(profile);
+        }
+        Directory.CreateDirectory(AppPaths.GamesDir);
+        await File.WriteAllTextAsync(GameIpsetPath(profile.Id), share.Addresses + Environment.NewLine);
+        _settingsStore.Save(Settings);
+        Log.Info($"Game profile {profile.Id} imported ({(existing is null ? "new" : "replaced")})");
+        await ReapplyVpnAfterProfileChangeAsync();
+        if (_runner.IsRunning && profile.Enabled) await StartCoreAsync();
+    });
+
     private static readonly TimeSpan SdrRefreshAge = TimeSpan.FromDays(7);
 
     /// <summary>
