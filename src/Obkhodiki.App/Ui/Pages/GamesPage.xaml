@@ -54,7 +54,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
-              <Ellipse Width="10" Height="10" Fill="#FF6B6B" VerticalAlignment="Center" Margin="0,0,14,0"
+              <Ellipse Width="10" Height="10" Fill="{DynamicResource SystemFillColorCriticalBrush}" VerticalAlignment="Center" Margin="0,0,14,0"
                        Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibility}}" />
               <StackPanel Grid.Column="1">
                 <TextBlock Style="{StaticResource Caption}" Text="Адресов" />

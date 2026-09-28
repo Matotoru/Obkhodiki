@@ -56,27 +56,12 @@ public sealed class EventKindToSymbolConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
-public sealed class EventKindToBrushConverter : IValueConverter
+
+/// <summary>True when both values are the same object (e.g. the item is the selected one).</summary>
+public sealed class ReferenceEqualsConverter : IMultiValueConverter
 {
-    private static readonly Brush Success = Frozen(Color.FromRgb(0x6C, 0xCB, 0x5F));
-    private static readonly Brush Warning = Frozen(Color.FromRgb(0xFC, 0xE1, 0x00));
-    private static readonly Brush Error = Frozen(Color.FromRgb(0xFF, 0x99, 0xA4));
-    private static readonly Brush Info = Frozen(Color.FromRgb(0x60, 0xCD, 0xFF));
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) =>
+        values.Length == 2 && ReferenceEquals(values[0], values[1]);
 
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        EventKind.Success => Success,
-        EventKind.Warning => Warning,
-        EventKind.Error => Error,
-        _ => Info,
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
-
-    private static Brush Frozen(Color c)
-    {
-        var b = new SolidColorBrush(c);
-        b.Freeze();
-        return b;
-    }
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

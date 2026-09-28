@@ -72,7 +72,7 @@
           <StackPanel>
             <StackPanel Orientation="Horizontal">
               <TextBlock FontWeight="SemiBold" FontSize="15" Text="VPS" />
-              <Ellipse Width="8" Height="8" Margin="8,2,0,0" Fill="#6CCB5F" Visibility="{Binding VpnOn, Converter={StaticResource BoolToVisibility}}" />
+              <Ellipse Width="8" Height="8" Margin="8,2,0,0" Fill="{DynamicResource SystemFillColorSuccessBrush}" Visibility="{Binding VpnOn, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
             <TextBlock Margin="0,4,0,0" Style="{StaticResource Caption}" Text="{Binding VpnSummary}" />
           </StackPanel>
@@ -84,7 +84,7 @@
           <StackPanel>
             <StackPanel Orientation="Horizontal">
               <TextBlock FontWeight="SemiBold" FontSize="15" Text="Telegram" />
-              <Ellipse Width="8" Height="8" Margin="8,2,0,0" Fill="#6CCB5F" Visibility="{Binding TelegramOn, Converter={StaticResource BoolToVisibility}}" />
+              <Ellipse Width="8" Height="8" Margin="8,2,0,0" Fill="{DynamicResource SystemFillColorSuccessBrush}" Visibility="{Binding TelegramOn, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
             <TextBlock Margin="0,4,0,0" Style="{StaticResource Caption}" Text="{Binding TelegramSummary}" />
           </StackPanel>
@@ -113,7 +113,25 @@
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <ui:SymbolIcon Symbol="{Binding Kind, Converter={StaticResource EventKindToSymbol}}" Foreground="{Binding Kind, Converter={StaticResource EventKindToBrush}}" FontSize="18" VerticalAlignment="Top" Margin="0,1,0,0" />
+                    <ui:SymbolIcon Symbol="{Binding Kind, Converter={StaticResource EventKindToSymbol}}" FontSize="18" VerticalAlignment="Top" Margin="0,1,0,0">
+                      <!-- Theme resources, so the colours follow a light/dark switch. -->
+                      <ui:SymbolIcon.Style>
+                        <Style TargetType="ui:SymbolIcon">
+                          <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding Kind}" Value="Success">
+                              <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Warning">
+                              <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Error">
+                              <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </ui:SymbolIcon.Style>
+                    </ui:SymbolIcon>
                     <StackPanel Grid.Column="1" Margin="12,0,12,0">
                       <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
                       <TextBlock Style="{StaticResource Caption}" Text="{Binding Text}" />

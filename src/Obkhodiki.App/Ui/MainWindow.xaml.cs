@@ -11,7 +11,8 @@ public partial class MainWindow
     public MainWindow()
     {
         DataContext = ShellViewModel.Current;
-        Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this);
+        var settings = ShellViewModel.Current.Controller?.Settings;
+        ThemeService.Apply(this, settings?.AppTheme, settings?.AppPalette);
         InitializeComponent();
         var version = SelfUpdate.CurrentVersion;
         Title = $"{Obkhodiki.Core.Updates.AppInfo.Name} {version}";

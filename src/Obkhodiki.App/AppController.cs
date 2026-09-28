@@ -64,6 +64,14 @@ internal sealed partial class AppController : IDisposable
         _settingsStore.Save(Settings);
         return Task.CompletedTask;
     });
+    public Task SetAppearanceAsync(string theme, string palette) => Serialized("Сохранение настроек…", silentErrors: false, () =>
+    {
+        Settings.AppTheme = theme;
+        Settings.AppPalette = palette;
+        _settingsStore.Save(Settings);
+        return Task.CompletedTask;
+    });
+
     public EngineLayout? Engine => _engine;
     public bool IsRunning => _runner.IsRunning;
     public string? BusyText => _busyText;

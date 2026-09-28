@@ -1,3 +1,4 @@
+using Obkhodiki.App.Ui;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -67,6 +68,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool _autostart;
     [ObservableProperty] private bool _checkUpdatesOnStart = true;
+    [ObservableProperty] private string _theme = ThemeService.System;
+    [ObservableProperty] private AccentPalette _palette = ThemeService.Palette(ThemeService.DefaultPalette);
+
+    public IReadOnlyList<ThemeOption> ThemeOptions => ThemeService.Themes;
+    public IReadOnlyList<AccentPalette> Palettes => ThemeService.Palettes;
     [ObservableProperty] private string _appVersion = typeof(SettingsViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
 
     public SettingsViewModel(ShellViewModel shell)
@@ -114,6 +120,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         _ = _shell.RunAsync(c => c.SetCheckUpdatesOnStartAsync(value));
     }
 
+    partial void OnThemeChanged(string value) => ApplyAppearance();
+
+    [RelayCommand]
+    private void SelectPalette(AccentPalette? palette)
+    {
+        if (palette is null) return;
+        Palette = palette;
+        ApplyAppearance();
+    }
+
+    private void ApplyAppearance()
+    {
+        if (_syncing) return;
+        if (System.Windows.Application.Current?.MainWindow is { } window) ThemeService.Apply(window, Theme, Palette.Id);
+        _ = _shell.RunAsync(c => c.SetAppearanceAsync(Theme, Palette.Id));
+    }
+
     private async Task SetAutostartAsync(bool enable)
     {
         try
@@ -155,6 +178,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         _syncing = true;
         CheckUpdatesOnStart = c.Settings.CheckUpdatesOnStart;
+        Theme = ThemeService.Themes.Any(t => t.Id == c.Settings.AppTheme) ? c.Settings.AppTheme : ThemeService.System;
+        Palette = ThemeService.Palette(c.Settings.AppPalette);
         _syncing = false;
         Components[0].Version = SelfUpdate.CurrentVersion;
         Components[0].UpdateVersion = c.AvailableAppUpdate?.Version;

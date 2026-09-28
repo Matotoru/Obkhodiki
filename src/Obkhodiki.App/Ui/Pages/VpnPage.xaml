@@ -67,13 +67,13 @@
                   </Style>
                 </TextBlock.Style>
               </TextBlock>
-              <Border Margin="10,0,0,0" Padding="8,1" CornerRadius="8" Background="#336CCB5F" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock FontSize="11" Foreground="#6CCB5F" Text="туннель работает" />
+              <Border Margin="10,0,0,0" Padding="8,1" CornerRadius="8" Background="{DynamicResource SystemFillColorSuccessBackgroundBrush}" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock FontSize="11" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Text="туннель работает" />
               </Border>
             </StackPanel>
             <TextBlock Style="{StaticResource Caption}" Text="{Binding ServerName}" />
             <TextBlock Style="{StaticResource Caption}" Text="{Binding SourceDetails}" Visibility="{Binding SourceDetails, Converter={StaticResource NullToVisibility}}" />
-            <TextBlock Style="{StaticResource Caption}" Foreground="#FFC857" Text="Есть серверы без проверки сертификата"
+            <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource SystemFillColorCautionBrush}" Text="Есть серверы без проверки сертификата"
                        Visibility="{Binding HasInsecure, Converter={StaticResource BoolToVisibility}}" />
             <TextBlock Style="{StaticResource Caption}" Text="{Binding TrafficText}" Visibility="{Binding TrafficText, Converter={StaticResource NullToVisibility}}" />
           </StackPanel>
@@ -108,7 +108,7 @@
           <TextBlock Margin="0,0,0,12" Style="{StaticResource Caption}" Text="Текущая подписка не удалится: она останется в «Сохранённых», и на неё можно будет переключиться."
                      Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}" />
           <ui:PasswordBox PlaceholderText="https://…/sub/…  или  vless://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
-          <TextBlock Margin="0,8,0,0" Foreground="#FF99A4" TextWrapping="Wrap" Text="{Binding ServerError}"
+          <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" Text="{Binding ServerError}"
                      Visibility="{Binding ServerError, Converter={StaticResource NullToVisibility}}" />
           <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <ui:Button Content="Отмена" Command="{Binding CancelEditServerCommand}" Margin="0,0,8,0"
@@ -225,7 +225,7 @@
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                             <Style.Triggers>
                               <DataTrigger Binding="{Binding IsDown}" Value="True">
-                                <Setter Property="Foreground" Value="#FF99A4" />
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                               </DataTrigger>
                             </Style.Triggers>
                           </Style>

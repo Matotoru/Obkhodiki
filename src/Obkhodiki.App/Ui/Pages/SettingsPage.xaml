@@ -32,6 +32,68 @@
         <ui:ToggleSwitch IsChecked="{Binding CheckUpdatesOnStart}" />
       </ui:CardControl>
 
+      <TextBlock Style="{StaticResource SectionTitle}" Text="Оформление" />
+      <ui:CardControl Margin="{StaticResource CardSpacing}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="DarkTheme24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Тема" />
+            <TextBlock Style="{StaticResource Caption}" Text="«Как в Windows» переключается вместе с системой." />
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ComboBox MinWidth="180" ItemsSource="{Binding ThemeOptions}" SelectedValuePath="Id" DisplayMemberPath="Title" SelectedValue="{Binding Theme}" />
+      </ui:CardControl>
+      <ui:Card Margin="{StaticResource CardSpacing}" Padding="20,14">
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Цвет" />
+          <TextBlock Style="{StaticResource Caption}" Text="У каждой палитры свой оттенок для светлой и тёмной темы, чтобы текст оставался читаемым." />
+          <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding Palettes}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Margin="0,0,14,8" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand" ToolTip="{Binding Title}"
+                        Command="{Binding DataContext.SelectPaletteCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                  <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                      <StackPanel Width="64">
+                        <Grid Width="36" Height="36" HorizontalAlignment="Center">
+                          <Ellipse x:Name="Ring" Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="0" />
+                          <Ellipse Margin="4" Fill="{Binding Swatch}" />
+                          <ui:SymbolIcon Symbol="Desktop24" FontSize="16" Foreground="White"
+                                         Visibility="{Binding IsSystem, Converter={StaticResource BoolToVisibility}}" />
+                        </Grid>
+                        <TextBlock Margin="0,4,0,0" HorizontalAlignment="Center" FontSize="11" TextAlignment="Center" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding Title}" />
+                      </StackPanel>
+                      <ControlTemplate.Triggers>
+                        <DataTrigger Value="True">
+                          <DataTrigger.Binding>
+                            <MultiBinding Converter="{StaticResource ReferenceEquals}">
+                              <Binding />
+                              <Binding Path="DataContext.Palette" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                            </MultiBinding>
+                          </DataTrigger.Binding>
+                          <Setter TargetName="Ring" Property="StrokeThickness" Value="2" />
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter TargetName="Ring" Property="StrokeThickness" Value="1" />
+                        </Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Button.Template>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ui:Card>
+
       <TextBlock Style="{StaticResource SectionTitle}" Text="Компоненты" />
       <ItemsControl ItemsSource="{Binding Components}">
         <ItemsControl.ItemTemplate>

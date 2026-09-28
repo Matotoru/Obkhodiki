@@ -42,6 +42,7 @@ static class Program
         };
         window.SetResourceReference(Window.BackgroundProperty, "ApplicationBackgroundBrush");
 
+        ThemeService.Backdrop = Wpf.Ui.Controls.WindowBackdropType.None;
         var shots = new (string Name, int Height, Action Setup)[]
         {
             ("home", 740, () => window.Navigate("Home")),
@@ -54,6 +55,10 @@ static class Program
             ("vpn-bottom", 1000, () => window.Navigate("Vpn")),
             ("telegram", 740, () => window.Navigate("Telegram")),
             ("settings", 1400, () => window.Navigate("Settings")),
+            ("home-light", 740, () => { ThemeService.Apply(window, ThemeService.Light, "cat"); window.Navigate("Home"); }),
+            ("vpn-light", 1100, () => { ThemeService.Apply(window, ThemeService.Light, "ocean"); window.Navigate("Vpn"); }),
+            ("settings-light", 1400, () => { ThemeService.Apply(window, ThemeService.Light, "mint"); window.Navigate("Settings"); }),
+            ("home-dark-lavender", 740, () => { ThemeService.Apply(window, ThemeService.Dark, "lavender"); window.Navigate("Home"); }),
         };
 
         window.Loaded += async (_, _) =>
@@ -65,12 +70,25 @@ static class Program
                     window.Height = height;
                     setup();
                     await Settle(window);
+                    if (name.StartsWith("settings", StringComparison.Ordinal))
+                    {
+                        ScrollToEnd(window, top: true);
+                        await Settle(window);
+                    }
                     if (name.EndsWith("-bottom", StringComparison.Ordinal))
                     {
                         ScrollToEnd(window);
                         await Settle(window);
                     }
                     Save(window, Path.Combine(outDir, name + ".png"));
+                    if (Environment.GetEnvironmentVariable("UIPREVIEW_ACCENT") == "1")
+                    {
+                        foreach (var key in new[] { "SystemAccentColor", "SystemAccentColorPrimary", "AccentFillColorDefaultBrush", "ToggleSwitchFillOn", "AccentTextFillColorPrimaryBrush" })
+                        {
+                            var v = Application.Current.TryFindResource(key);
+                            File.AppendAllText(Path.Combine(outDir, "accent.txt"), $"{name} {key} = {(v is SolidColorBrush b ? b.Color.ToString() : v?.ToString())}" + Environment.NewLine);
+                        }
+                    }
                     if (Environment.GetEnvironmentVariable("UIPREVIEW_SCROLL") == "1") DumpScroll(window, name, outDir);
                 }
             }
@@ -127,14 +145,15 @@ static class Program
     }
 
     // Diagnostics: every ScrollViewer on screen with its sizes, to prove long pages can scroll.
-    private static void ScrollToEnd(DependencyObject d)
+    private static void ScrollToEnd(DependencyObject d, bool top = false)
     {
         if (d is System.Windows.Controls.ScrollViewer { ScrollableHeight: > 0 } sv)
         {
-            sv.ScrollToEnd();
+            if (top) sv.ScrollToHome();
+            else sv.ScrollToEnd();
             return;
         }
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) ScrollToEnd(VisualTreeHelper.GetChild(d, i));
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) ScrollToEnd(VisualTreeHelper.GetChild(d, i), top);
     }
 
     private static void DumpScroll(Window w, string name, string outDir)

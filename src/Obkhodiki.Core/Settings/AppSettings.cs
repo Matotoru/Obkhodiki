@@ -35,6 +35,12 @@ public sealed class AppSettings
     /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
     public List<string> VpnDomains { get; set; } = new();
 
+    /// <summary>Window theme: "system", "light" or "dark".</summary>
+    public string AppTheme { get; set; } = "system";
+
+    /// <summary>Accent palette id (see ThemeService.Palettes); "system" follows the Windows accent.</summary>
+    public string AppPalette { get; set; } = "cat";
+
     /// <summary>Last subscription warning shown (SubscriptionAlert.Key), so each one is announced once.</summary>
     public string? VpnAlertShown { get; set; }
 
