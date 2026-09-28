@@ -129,7 +129,7 @@ public sealed class AppSettingsStore
     }
 
     // Syntactically valid but unusable values would make every winws start fail; fall back per field.
-    private static AppSettings Sanitize(AppSettings s)
+    public static AppSettings Sanitize(AppSettings s)
     {
         if (!Enum.IsDefined(s.GameFilter)) s.GameFilter = GameFilterMode.Disabled;
         if (!IsValidRange(s.GameTcpRange)) s.GameTcpRange = GameFilterOptions.DefaultRange;

@@ -140,6 +140,27 @@
         </StackPanel>
       </ui:CardAction>
 
+      <TextBlock Style="{StaticResource SectionTitle}" Text="Перенос настроек" />
+      <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding ExportSettingsCommand}">
+        <ui:CardAction.Icon>
+          <ui:SymbolIcon Symbol="ArrowExportUp24" />
+        </ui:CardAction.Icon>
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Сохранить настройки в файл" />
+          <TextBlock Style="{StaticResource Caption}"
+                     Text="Стратегия, игры с их адресами, списки, маршруты VPS и оформление. Подписки и ссылки серверов в файл не попадают." />
+        </StackPanel>
+      </ui:CardAction>
+      <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding ImportSettingsCommand}">
+        <ui:CardAction.Icon>
+          <ui:SymbolIcon Symbol="ArrowImport24" />
+        </ui:CardAction.Icon>
+        <StackPanel>
+          <TextBlock FontWeight="SemiBold" Text="Загрузить настройки из файла" />
+          <TextBlock Style="{StaticResource Caption}" Text="Заменит текущие настройки, игры и списки. Подписки VPS останутся как есть." />
+        </StackPanel>
+      </ui:CardAction>
+
       <TextBlock Style="{StaticResource SectionTitle}" Text="Диагностика" />
       <ui:CardAction Margin="{StaticResource CardSpacing}" Command="{Binding OpenLogCommand, Source={x:Static vm:ShellViewModel.Current}}">
         <ui:CardAction.Icon>

@@ -191,6 +191,54 @@ public sealed partial class SettingsViewModel : ObservableObject
         Components[3].UpdateVersion = c.AvailableSbUpdate?.Version;
     }
 
+    [RelayCommand]
+    private async Task ExportSettingsAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Сохранить настройки Obkhodiki",
+            FileName = $"obkhodiki-settings-{DateTime.Now:yyyyMMdd}.json",
+            Filter = "Настройки Obkhodiki (*.json)|*.json",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dialog.ShowDialog() != true) return;
+        await _shell.RunAsync(c => c.ExportSettingsAsync(dialog.FileName));
+    }
+
+    [RelayCommand]
+    private async Task ImportSettingsAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Загрузить настройки Obkhodiki",
+            Filter = "Настройки Obkhodiki (*.json)|*.json|Все файлы (*.*)|*.*",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dialog.ShowDialog() != true || _shell.Controller is not { } c) return;
+
+        Obkhodiki.Core.Settings.SettingsBundle bundle;
+        try
+        {
+            bundle = await AppController.ReadSettingsFileAsync(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
+        {
+            _shell.AddEvent("Настройки", ex.Message, EventKind.Error);
+            return;
+        }
+        var s = bundle.Settings;
+        var games = s.GameProfiles.Count == 0 ? "нет" : string.Join(", ", s.GameProfiles.Select(g => g.Name).Take(5)) + (s.GameProfiles.Count > 5 ? "…" : "");
+        var nl = Environment.NewLine;
+        var text = $"Файл от {bundle.Created.ToLocalTime():dd.MM.yyyy HH:mm} (Obkhodiki {bundle.CreatedWith ?? "?"})." + nl + nl +
+                   $"Стратегия: {s.SelectedStrategy ?? "по умолчанию"}" + nl + $"Игры: {games}" + nl +
+                   $"Списков: {bundle.UserLists.Count}, адресов игр: {bundle.GameAddresses.Count}" + nl + nl +
+                   "Текущие настройки, игры и списки будут заменены. Подписки VPS останутся прежними.";
+        if (!await UiDialogs.ConfirmAsync("Загрузить настройки", text, "Загрузить")) return;
+        await _shell.RunAsync(ctl => ctl.ImportSettingsAsync(bundle));
+        if (System.Windows.Application.Current?.MainWindow is { } window) ThemeService.Apply(window, c.Settings.AppTheme, c.Settings.AppPalette);
+        _shell.Refresh();
+    }
+
     public IReadOnlyList<Obkhodiki.Core.Updates.AppInfo.Credit> Credits => Obkhodiki.Core.Updates.AppInfo.Credits;
 
     // Opened as the desktop user: a browser started from this elevated process would run as admin.
