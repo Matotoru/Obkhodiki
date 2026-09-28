@@ -79,6 +79,8 @@ public class StrategyAutoSelectorTests
 
         Assert.Equal("b", result.Best?.Name);
         Assert.Equal(2, result.Scores.Single(x => x.Strategy.Name == "b").Passed);
+        Assert.Equal(new[] { "WarDogs" }, result.Scores.Single(x => x.Strategy.Name == "b").Failed);
+        Assert.Empty(result.Scores.Single(x => x.Strategy.Name == "a").Failed!.Where(n => n == "YouTube"));
     }
 
     [Fact]

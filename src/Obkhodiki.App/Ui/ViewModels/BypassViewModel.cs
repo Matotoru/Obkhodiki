@@ -15,7 +15,13 @@ public sealed partial class StrategyScoreRow : ObservableObject
     public required int Total { get; init; }
     public double? AvgMs { get; init; }
     public string? Error { get; init; }
+    public IReadOnlyList<string> Failed { get; init; } = Array.Empty<string>();
     [ObservableProperty] private bool _isBest;
+
+    /// <summary>Which targets did not open; shown under partly working strategies (all of them is just noise).</summary>
+    public string? FailedText => Passed > 0 && Failed.Count > 0 ? "Не открылись: " + string.Join(", ", Failed) : null;
+
+    public string? Details => Error ?? (Failed.Count > 0 ? "Не открылись: " + string.Join(", ", Failed) : null);
 
     public string PassedText => $"{Passed} из {Total}";
     public string LatencyText => AvgMs is { } ms ? $"{ms:F0} мс" : "—";
@@ -143,6 +149,7 @@ public sealed partial class BypassViewModel : ObservableObject
                 Total = s.Total,
                 AvgMs = s.Passed > 0 ? s.TotalLatency.TotalMilliseconds / s.Passed : null,
                 Error = s.Error,
+                Failed = s.Failed ?? Array.Empty<string>(),
             });
         }
     }
@@ -161,7 +168,7 @@ public sealed partial class BypassViewModel : ObservableObject
         SelectedStrategy = "general (ALT)";
         SelectedGameFilter = GameFilterOptions[0];
         FlowsealVersion = "1.10.3";
-        Results.Add(new StrategyScoreRow { Name = "general", Passed = 9, Total = 12, AvgMs = 142 });
+        Results.Add(new StrategyScoreRow { Name = "general", Passed = 9, Total = 12, AvgMs = 142, Failed = new[] { "DiscordGateway", "YouTubeVideoRedirect", "CloudflareCDN" } });
         Results.Add(new StrategyScoreRow { Name = "general (ALT)", Passed = 12, Total = 12, AvgMs = 118, IsBest = true });
         Results.Add(new StrategyScoreRow { Name = "general (ALT2)", Passed = 0, Total = 12, Error = "winws.exe exited with code 1" });
         IsSelecting = true;

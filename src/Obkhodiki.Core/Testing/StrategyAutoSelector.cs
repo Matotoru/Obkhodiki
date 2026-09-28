@@ -3,7 +3,9 @@ using Obkhodiki.Core.Strategies;
 
 namespace Obkhodiki.Core.Testing;
 
-public sealed record StrategyScore(StrategyDefinition Strategy, int Passed, int Total, TimeSpan TotalLatency, string? Error);
+/// <param name="Failed">Names of the targets that did not open (from targets.txt).</param>
+public sealed record StrategyScore(
+    StrategyDefinition Strategy, int Passed, int Total, TimeSpan TotalLatency, string? Error, IReadOnlyList<string>? Failed = null);
 
 public sealed record SelectionResult(StrategyDefinition? Best, IReadOnlyList<StrategyScore> Scores);
 
@@ -90,6 +92,7 @@ public sealed class StrategyAutoSelector
             // Sequential on purpose: parallel requests through one DPI path skew latency and trip rate limits.
             var passed = 0;
             var latency = TimeSpan.Zero;
+            var failed = new List<string>();
             for (var t = 0; t < targets.Count; t++)
             {
                 var result = await _probe.ProbeAsync(targets[t], ct).ConfigureAwait(false);
@@ -99,9 +102,13 @@ public sealed class StrategyAutoSelector
                     passed++;
                     latency += result.Latency;
                 }
+                else
+                {
+                    failed.Add(targets[t].Name);
+                }
                 targetDone(t + 1);
             }
-            return new StrategyScore(strategy, passed, targets.Count, latency, null);
+            return new StrategyScore(strategy, passed, targets.Count, latency, null, failed);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

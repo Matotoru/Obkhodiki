@@ -292,7 +292,8 @@ internal sealed partial class AppController : IDisposable
             SetBusy($"Подбор стратегии: {p.StrategyIndex + 1}/{p.StrategyCount} ({p.Fraction:P0})");
             if (p.Completed is { } s)
             {
-                Log.Info($"AutoSelect {s.Strategy.Name}: {s.Passed}/{s.Total}, latency {s.TotalLatency.TotalMilliseconds:F0} ms {s.Error}");
+                Log.Info($"AutoSelect {s.Strategy.Name}: {s.Passed}/{s.Total}, latency {s.TotalLatency.TotalMilliseconds:F0} ms {s.Error}" +
+                         (s.Failed is { Count: > 0 } failed ? $"; failed: {string.Join(", ", failed)}" : ""));
             }
             uiProgress?.Report(p);
         });

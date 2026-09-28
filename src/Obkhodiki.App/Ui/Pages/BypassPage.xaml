@@ -72,7 +72,11 @@
           <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding Results}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Grid Margin="0,4">
+                <Grid Margin="0,4" ToolTip="{Binding Details}">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="220" />
@@ -82,10 +86,12 @@
                   </Grid.ColumnDefinitions>
                   <ui:SymbolIcon Symbol="Star24" Filled="True" Foreground="{DynamicResource AccentFillColorDefaultBrush}"
                                  Visibility="{Binding IsBest, Converter={StaticResource BoolToVisibility}}" />
-                  <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding Name}" ToolTip="{Binding Error}" />
+                  <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding Name}" />
                   <ProgressBar Grid.Column="2" Height="4" Margin="12,0" Maximum="1" Value="{Binding Ratio, Mode=OneWay}" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="3" VerticalAlignment="Center" Text="{Binding PassedText}" />
                   <TextBlock Grid.Column="4" VerticalAlignment="Center" Style="{StaticResource Caption}" Text="{Binding LatencyText}" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" Margin="0,1,0,2" Style="{StaticResource Caption}" TextWrapping="Wrap"
+                             Text="{Binding FailedText}" Visibility="{Binding FailedText, Converter={StaticResource NullToVisibility}}" />
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
