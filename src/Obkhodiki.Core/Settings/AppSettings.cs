@@ -35,6 +35,12 @@ public sealed class AppSettings
     /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
     public List<string> VpnDomains { get; set; } = new();
 
+    /// <summary>Programs that never go through the VPS, in either mode (beats every other rule).</summary>
+    public List<string> VpnBypassProcesses { get; set; } = new();
+
+    /// <summary>Sites (domains incl. subdomains) and addresses (IP or CIDR) that never go through the VPS.</summary>
+    public List<string> VpnBypassEntries { get; set; } = new();
+
     /// <summary>
     /// Master switch. Off: sing-box never runs (no tunnel, no measurements, Auto games go direct), but every
     /// VPS setting (mode, categories, programs, servers) is kept for when it is turned back on.
@@ -124,6 +130,10 @@ public sealed class AppSettingsStore
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         s.VpnDomains = (s.VpnDomains ?? new()).Select(d => d is null ? null : Vpn.SingBoxConfig.NormalizeDomain(d))
             .Where(d => d is not null).Select(d => d!).Distinct().ToList();
+        s.VpnBypassProcesses = (s.VpnBypassProcesses ?? new()).Where(p => p is not null && Vpn.SingBoxConfig.IsValidProcessName(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        s.VpnBypassEntries = (s.VpnBypassEntries ?? new()).Select(e => e is null ? null : Vpn.SingBoxConfig.NormalizeBypassEntry(e))
+            .Where(e => e is not null).Select(e => e!).Distinct().ToList();
         s.VpnProxyCategories = Vpn.RuleCatalog.Sanitize(s.VpnProxyCategories, Vpn.RuleCatalog.Proxy);
         s.VpnDirectCategories = Vpn.RuleCatalog.Sanitize(s.VpnDirectCategories, Vpn.RuleCatalog.Direct);
         if (s.VpnSelectedServer is { } tag && !System.Text.RegularExpressions.Regex.IsMatch(tag, "^s-[0-9a-f]{10}$")) s.VpnSelectedServer = null;

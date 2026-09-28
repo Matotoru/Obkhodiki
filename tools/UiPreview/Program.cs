@@ -51,6 +51,7 @@ static class Program
             ("vpn", 1900, () => window.Navigate("Vpn")),
             ("vpn-small", 600, () => window.Navigate("Vpn")),
             ("vpn-selective", 1500, () => { shell.Vpn.FullTunnel = false; window.Navigate("Vpn"); }),
+            ("vpn-bottom", 1000, () => window.Navigate("Vpn")),
             ("telegram", 740, () => window.Navigate("Telegram")),
             ("settings", 1400, () => window.Navigate("Settings")),
         };
@@ -64,6 +65,11 @@ static class Program
                     window.Height = height;
                     setup();
                     await Settle(window);
+                    if (name.EndsWith("-bottom", StringComparison.Ordinal))
+                    {
+                        ScrollToEnd(window);
+                        await Settle(window);
+                    }
                     Save(window, Path.Combine(outDir, name + ".png"));
                     if (Environment.GetEnvironmentVariable("UIPREVIEW_SCROLL") == "1") DumpScroll(window, name, outDir);
                 }
@@ -121,6 +127,16 @@ static class Program
     }
 
     // Diagnostics: every ScrollViewer on screen with its sizes, to prove long pages can scroll.
+    private static void ScrollToEnd(DependencyObject d)
+    {
+        if (d is System.Windows.Controls.ScrollViewer { ScrollableHeight: > 0 } sv)
+        {
+            sv.ScrollToEnd();
+            return;
+        }
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) ScrollToEnd(VisualTreeHelper.GetChild(d, i));
+    }
+
     private static void DumpScroll(Window w, string name, string outDir)
     {
         var lines = new List<string>();

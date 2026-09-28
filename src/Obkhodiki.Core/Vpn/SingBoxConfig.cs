@@ -27,6 +27,10 @@ public sealed record SingBoxOptions(
 {
     public bool FullTunnel { get; init; }
     public IReadOnlyList<string> DirectProcesses { get; init; } = Array.Empty<string>();
+
+    /// <summary>Never through the VPS, in either mode: programs, and domains or IP/CIDR entries.</summary>
+    public IReadOnlyList<string> BypassProcesses { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BypassEntries { get; init; } = Array.Empty<string>();
     public IReadOnlyList<LocalRuleSet> ProxyRuleSets { get; init; } = Array.Empty<LocalRuleSet>();
     public IReadOnlyList<LocalRuleSet> DirectRuleSets { get; init; } = Array.Empty<LocalRuleSet>();
     public ClashApiOptions? ClashApi { get; init; }
@@ -88,6 +92,31 @@ public static partial class SingBoxConfig
         return Domain().IsMatch(d) ? d : null;
     }
 
+    /// <summary>An IPv4/IPv6 address or CIDR in canonical form; null when it is not one.</summary>
+    public static string? NormalizeCidr(string text)
+    {
+        var t = text.Trim();
+        var slash = t.IndexOf('/');
+        var addressText = slash < 0 ? t : t[..slash];
+        if (!System.Net.IPAddress.TryParse(addressText, out var address) || addressText.Contains('%')) return null;
+        // IPAddress.TryParse accepts "1" or "1.2" as IPv4; only full dotted quads or real IPv6 count.
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && addressText.Count(c => c == '.') != 3) return null;
+        var max = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128;
+        var bits = max;
+        if (slash >= 0 && (!int.TryParse(t[(slash + 1)..], System.Globalization.NumberStyles.None, null, out bits) || bits < 0 || bits > max)) return null;
+        return $"{address}/{bits}";
+    }
+
+    /// <summary>A "never through the VPS" entry: a domain (normalized) or an address/CIDR; null when neither.</summary>
+    public static string? NormalizeBypassEntry(string text)
+    {
+        if (NormalizeCidr(text) is { } cidr) return cidr;
+        // "1.2.3" is a mistyped address, not a domain: real top-level domains are never all digits.
+        return NormalizeDomain(text) is { } domain && !domain[(domain.LastIndexOf('.') + 1)..].All(char.IsAsciiDigit) ? domain : null;
+    }
+
+    public static bool IsCidr(string entry) => entry.Contains('/');
+
     /// <summary>Single-server convenience (tests, older callers).</summary>
     public static string Build(IProxyServer server, SingBoxOptions options) =>
         Build(new[] { new VpnServerEntry("server", server) }, "server", options);
@@ -101,6 +130,11 @@ public static partial class SingBoxConfig
 
         var processes = ValidProcesses(options.Processes);
         var directProcesses = ValidProcesses(options.DirectProcesses);
+        var bypassProcesses = ValidProcesses(options.BypassProcesses);
+        var bypassEntries = new List<string>();
+        foreach (var e in options.BypassEntries) bypassEntries.Add(NormalizeBypassEntry(e) ?? throw new ArgumentException($"Invalid entry '{e}'."));
+        var bypassDomains = bypassEntries.Where(e => !IsCidr(e)).Distinct().ToList();
+        var bypassCidrs = bypassEntries.Where(IsCidr).Distinct().ToList();
         var domains = new List<string>();
         foreach (var d in options.Domains) domains.Add(NormalizeDomain(d) ?? throw new ArgumentException($"Invalid domain '{d}'."));
         domains = domains.Distinct().ToList();
@@ -175,6 +209,10 @@ public static partial class SingBoxConfig
         rules.Add(new JsonObject { ["action"] = "sniff" });
         if (remoteDns) rules.Add(new JsonObject { ["protocol"] = "dns", ["action"] = "hijack-dns" });
 
+        // The user's "never through the VPS" list comes first: it beats programs, sites, categories and games.
+        if (bypassProcesses.Count > 0) rules.Add(new JsonObject { ["process_name"] = LinkParsing.Array(bypassProcesses), ["outbound"] = "direct" });
+        if (bypassDomains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(bypassDomains), ["outbound"] = "direct" });
+        if (bypassCidrs.Count > 0) rules.Add(new JsonObject { ["ip_cidr"] = LinkParsing.Array(bypassCidrs), ["outbound"] = "direct" });
         if (full)
         {
             rules.Add(new JsonObject { ["ip_is_private"] = true, ["outbound"] = "direct" });
@@ -211,7 +249,7 @@ public static partial class SingBoxConfig
         {
             ["log"] = new JsonObject { ["level"] = "warn", ["timestamp"] = true, ["output"] = options.LogPath },
             ["dns"] = BuildDns(full, remoteDns, options.HostIpv6, domains, proxyDnsSets, directDnsSets,
-                options.LocalDnsDomains.Select(NormalizeDomain).Where(d => d is not null).Select(d => d!).Distinct().ToList()),
+                options.LocalDnsDomains.Select(NormalizeDomain).Where(d => d is not null).Select(d => d!).Concat(bypassDomains).Distinct().ToList()),
             ["inbounds"] = inbounds,
             ["outbounds"] = outbounds,
             ["route"] = route,

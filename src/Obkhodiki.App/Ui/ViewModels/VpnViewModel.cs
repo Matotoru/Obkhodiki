@@ -71,6 +71,7 @@ public sealed partial class VpnViewModel : ObservableObject
     private CancellationTokenSource? _measureCts;
 
     public ObservableCollection<string> Programs { get; } = new();
+    public ObservableCollection<string> BypassPrograms { get; } = new();
     public ObservableCollection<string> RunningPrograms { get; } = new();
     public ObservableCollection<QualityTarget> Targets { get; } = new();
 
@@ -105,6 +106,8 @@ public sealed partial class VpnViewModel : ObservableObject
     [ObservableProperty] private string _newProgram = "";
     [ObservableProperty] private string? _selectedProgram;
     [ObservableProperty] private string _domainsText = "";
+    [ObservableProperty] private string _newBypassProgram = "";
+    [ObservableProperty] private string _bypassText = "";
     [ObservableProperty] private string? _listsMessage;
     [ObservableProperty] private bool _listsDirty;
     [ObservableProperty] private QualityTarget? _selectedTarget;
@@ -284,6 +287,12 @@ public sealed partial class VpnViewModel : ObservableObject
                 foreach (var p in c.Settings.VpnProcesses) Programs.Add(p);
             }
             DomainsText = string.Join(Environment.NewLine, c.Settings.VpnDomains);
+            if (!c.Settings.VpnBypassProcesses.SequenceEqual(BypassPrograms))
+            {
+                BypassPrograms.Clear();
+                foreach (var p in c.Settings.VpnBypassProcesses) BypassPrograms.Add(p);
+            }
+            BypassText = string.Join(Environment.NewLine, c.Settings.VpnBypassEntries);
             ListsDirty = false;
         }
 
@@ -427,6 +436,33 @@ public sealed partial class VpnViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void AddBypassProgram()
+    {
+        var name = NewBypassProgram.Trim();
+        if (name.Length == 0) return;
+        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name += ".exe";
+        if (!SingBoxConfig.IsValidProcessName(name))
+        {
+            ListsMessage = "Укажите имя программы, например steam.exe.";
+            return;
+        }
+        if (!BypassPrograms.Contains(name, StringComparer.OrdinalIgnoreCase)) BypassPrograms.Add(name);
+        NewBypassProgram = "";
+        ListsMessage = null;
+        ListsDirty = true;
+    }
+
+    [RelayCommand]
+    private void RemoveBypassProgram(string? name)
+    {
+        if (name is null) return;
+        BypassPrograms.Remove(name);
+        ListsDirty = true;
+    }
+
+    partial void OnBypassTextChanged(string value) => ListsDirty = true;
+
+    [RelayCommand]
     private async Task SaveListsAsync()
     {
         if (_shell.Controller is not { } c) return;
@@ -437,8 +473,16 @@ public sealed partial class VpnViewModel : ObservableObject
             ListsMessage = "Не похоже на домен: " + string.Join(", ", bad.Take(3));
             return;
         }
+        var bypassLines = BypassText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
+        var badBypass = bypassLines.Where(l => SingBoxConfig.NormalizeBypassEntry(l) is null).ToList();
+        if (badBypass.Count > 0)
+        {
+            ListsMessage = "Не похоже на сайт или адрес: " + string.Join(", ", badBypass.Take(3));
+            return;
+        }
         ListsMessage = null;
-        if (await c.SetVpnListsAsync(Programs.ToList(), lines, c.Settings.VpnProxyCategories, c.Settings.VpnDirectCategories))
+        if (await c.SetVpnListsAsync(Programs.ToList(), lines, c.Settings.VpnProxyCategories, c.Settings.VpnDirectCategories,
+                BypassPrograms.ToList(), bypassLines))
         {
             ListsDirty = false;
             ListsMessage = "Сохранено.";
@@ -555,6 +599,8 @@ public sealed partial class VpnViewModel : ObservableObject
         SingBoxVersion = "1.14.2";
         foreach (var p in new[] { "chrome.exe", "Spotify.exe" }) Programs.Add(p);
         DomainsText = "chatgpt.com\nopenai.com";
+        BypassPrograms.Add("steam.exe");
+        BypassText = "sberbank.ru\n10.0.0.0/8";
         ListsDirty = false;
         Targets.Add(new QualityTarget("Игра: War Dogs", new[] { IPEndPoint.Parse("3.120.1.1:443") }));
         SelectedTarget = Targets[0];

@@ -453,3 +453,73 @@ public class ServerRankerTests
         Assert.False(ServerPing.From("a", new int?[] { 50, null, null }).Reliable);
     }
 }
+
+public class BypassRulesTests
+{
+    private static readonly VpnServerEntry[] Servers = { VpnServerEntry.FromLink("hy2://pw@a.example.com:443#A") };
+
+    private static JsonArray Rules(bool full, string[] processes, string[] entries, string[]? proxyDomains = null)
+    {
+        var o = new SingBoxOptions(true, 20000, new[] { "chrome.exe" }, proxyDomains ?? Array.Empty<string>(), @"C:\x\sb.log", new ProbeCredentials("u", "p"))
+        {
+            FullTunnel = full,
+            BypassProcesses = processes,
+            BypassEntries = entries,
+        };
+        return JsonNode.Parse(SingBoxConfig.Build(Servers, null, o))!["route"]!["rules"]!.AsArray();
+    }
+
+    private static int IndexOf(JsonArray rules, string key, string value) =>
+        rules.Select((r, i) => (r, i)).First(x => x.r![key] is JsonArray a && a.Any(n => (string?)n == value)).i;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Bypass_GoesDirectBeforeEveryProxyRule(bool full)
+    {
+        var rules = Rules(full, new[] { "steam.exe" }, new[] { "sberbank.ru", "10.20.0.0/16", "2001:db8::1" }, new[] { "sberbank.ru" });
+
+        var byProcess = IndexOf(rules, "process_name", "steam.exe");
+        var byDomain = IndexOf(rules, "domain_suffix", "sberbank.ru");
+        var byCidr = IndexOf(rules, "ip_cidr", "10.20.0.0/16");
+        Assert.Equal("direct", (string?)rules[byProcess]!["outbound"]);
+        Assert.Equal("direct", (string?)rules[byDomain]!["outbound"]);
+        Assert.Equal("direct", (string?)rules[byCidr]!["outbound"]);
+        Assert.Contains(rules[byCidr]!["ip_cidr"]!.AsArray(), n => (string?)n == "2001:db8::1/128");
+        // The user's VPS list for the same site comes later and so never applies.
+        var proxyDomain = rules.Select((r, i) => (r, i)).Last(x => x.r!["domain_suffix"] is JsonArray a && a.Any(n => (string?)n == "sberbank.ru")).i;
+        Assert.True(byDomain < proxyDomain);
+        Assert.True(byProcess < IndexOf(rules, "process_name", "chrome.exe"));
+    }
+
+    [Theory]
+    [InlineData("1.2.3.4", "1.2.3.4/32")]
+    [InlineData(" 10.0.0.0/8 ", "10.0.0.0/8")]
+    [InlineData("2001:db8::/32", "2001:db8::/32")]
+    [InlineData("*.Example.COM", "example.com")]
+    [InlineData("1.2.3", null)]
+    [InlineData("1.2.3.4/33", null)]
+    [InlineData("fe80::1%eth0", null)]
+    [InlineData("not a site", null)]
+    public void BypassEntry_Normalized(string input, string? expected)
+    {
+        Assert.Equal(expected, SingBoxConfig.NormalizeBypassEntry(input));
+    }
+
+    [Fact]
+    public void Plan_BypassBeatsVpnListsAndGames()
+    {
+        var settings = new Obkhodiki.Core.Settings.AppSettings
+        {
+            VpnProcesses = { "Game.exe", "chrome.exe" },
+            VpnBypassProcesses = { "game.exe" },
+            VpnBypassEntries = { "Bank.ru", "8.8.8.8" },
+        };
+
+        var plan = VpnPlan.From(settings, Array.Empty<string>());
+
+        Assert.Equal(new[] { "chrome.exe" }, plan.Processes);
+        Assert.Equal(new[] { "game.exe" }, plan.BypassProcesses);
+        Assert.Equal(new[] { "bank.ru", "8.8.8.8/32" }, plan.BypassEntries);
+    }
+}

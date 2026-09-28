@@ -6,6 +6,8 @@ namespace Obkhodiki.Core.Vpn;
 /// <summary>What the tunnel has to carry right now, derived from settings and the per-session auto decisions.</summary>
 /// <param name="Processes">Through the VPS.</param>
 /// <param name="DirectProcesses">Kept off the VPS in full-tunnel mode (games set to direct, this app).</param>
+/// <param name="BypassProcesses">The user's "never through the VPS" programs, in either mode.</param>
+/// <param name="BypassEntries">The user's "never through the VPS" domains and IP/CIDR addresses, in either mode.</param>
 public sealed record VpnPlan(
     IReadOnlyList<string> Processes,
     IReadOnlyList<string> Domains,
@@ -14,6 +16,9 @@ public sealed record VpnPlan(
     IReadOnlyList<string> ProxyCategories,
     IReadOnlyList<string> DirectCategories)
 {
+    public IReadOnlyList<string> BypassProcesses { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BypassEntries { get; init; } = Array.Empty<string>();
+
     /// <summary>The app's own traffic (downloads, direct-path measurements) never rides the tunnel.</summary>
     public const string SelfProcess = "Obkhodiki.exe";
 
@@ -59,7 +64,10 @@ public sealed record VpnPlan(
         }
         processes.AddRange(autoVpnProcesses.Where(autoExes.Contains));
 
-        var proxy = processes.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // "Never through the VPS" beats every way a program can end up there (lists, game routes, Auto).
+        var bypass = settings.VpnBypassProcesses.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var proxy = processes.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(p => !bypass.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
         return new VpnPlan(
             proxy,
             settings.VpnDomains.ToList(),
@@ -67,6 +75,10 @@ public sealed record VpnPlan(
             direct.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase)
                 .Where(d => !proxy.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList(),
             RuleCatalog.Sanitize(settings.VpnProxyCategories, RuleCatalog.Proxy),
-            RuleCatalog.Sanitize(settings.VpnDirectCategories, RuleCatalog.Direct));
+            RuleCatalog.Sanitize(settings.VpnDirectCategories, RuleCatalog.Direct))
+        {
+            BypassProcesses = bypass,
+            BypassEntries = settings.VpnBypassEntries.Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList(),
+        };
     }
 }

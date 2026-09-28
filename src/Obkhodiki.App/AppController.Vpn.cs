@@ -192,13 +192,22 @@ internal sealed partial class AppController
 
     /// <returns>True when saved and applied; errors are shown as a notification.</returns>
     public async Task<bool> SetVpnListsAsync(IReadOnlyList<string> processes, IReadOnlyList<string> domains,
-        IReadOnlyList<string> proxyCategories, IReadOnlyList<string> directCategories)
+        IReadOnlyList<string> proxyCategories, IReadOnlyList<string> directCategories,
+        IReadOnlyList<string>? bypassProcesses = null, IReadOnlyList<string>? bypassEntries = null)
     {
         var ok = false;
         await Serialized("Настройка VPS…", silentErrors: false, async () =>
         {
             Settings.VpnProcesses = processes.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             Settings.VpnDomains = domains.Select(SingBoxConfig.NormalizeDomain).Where(d => d is not null).Select(d => d!).Distinct().ToList();
+            if (bypassProcesses is not null)
+            {
+                Settings.VpnBypassProcesses = bypassProcesses.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            }
+            if (bypassEntries is not null)
+            {
+                Settings.VpnBypassEntries = bypassEntries.Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList();
+            }
             Settings.VpnProxyCategories = RuleCatalog.Sanitize(proxyCategories, RuleCatalog.Proxy);
             Settings.VpnDirectCategories = RuleCatalog.Sanitize(directCategories, RuleCatalog.Direct);
             _settingsStore.Save(Settings);
@@ -327,7 +336,8 @@ internal sealed partial class AppController
         var tun = plan.NeedsTunnel;
         var hostIpv6 = HostHasIpv6();
         var signature = $"{_source.Signature()}|{tun}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
-                        $"{string.Join(",", plan.DirectProcesses)}|{stamps}|v6={hostIpv6}";
+                        $"{string.Join(",", plan.DirectProcesses)}|{string.Join(",", plan.BypassProcesses)}|{string.Join(",", plan.BypassEntries)}|" +
+                        $"{stamps}|v6={hostIpv6}";
         if (IsVpnRunning && signature == _appliedSignature) return;
 
         var localDns = new[] { "raw.githubusercontent.com", _source.SubscriptionHost }.Where(h => h is not null).Select(h => h!).ToList();
@@ -488,6 +498,8 @@ internal sealed partial class AppController
         {
             FullTunnel = plan.FullTunnel,
             DirectProcesses = plan.DirectProcesses,
+            BypassProcesses = plan.BypassProcesses,
+            BypassEntries = plan.BypassEntries,
             ProxyRuleSets = launch.ProxySets,
             DirectRuleSets = launch.DirectSets,
             ClashApi = api,
