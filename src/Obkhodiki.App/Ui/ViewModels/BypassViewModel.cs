@@ -93,7 +93,12 @@ public sealed partial class BypassViewModel : ObservableObject
 
     // Concurrent: the same button stops a running selection, so it must stay clickable while one runs.
     [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task AutoSelectAsync()
+    private Task AutoSelectAsync() => RunAutoSelectAsync(full: false);
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task AutoSelectFullAsync() => RunAutoSelectAsync(full: true);
+
+    private async Task RunAutoSelectAsync(bool full)
     {
         if (IsSelecting)
         {
@@ -110,7 +115,7 @@ public sealed partial class BypassViewModel : ObservableObject
         try
         {
             var progress = new Progress<SelectionProgress>(ShowProgress);
-            await _shell.RunAsync(c => c.AutoSelectAsync(progress, cts.Token));
+            await _shell.RunAsync(c => c.AutoSelectAsync(progress, cts.Token, full));
             if (cts.IsCancellationRequested) SelectionSummary = "Подбор отменён, оставлена прежняя стратегия.";
             else if (Results.Count == 0) SelectionSummary = "Подбор не выполнен — подробности в событиях.";
             else if (Results.All(r => r.Passed == 0)) SelectionSummary = "Ни одна стратегия не открыла цели. Проверьте интернет и список целей.";

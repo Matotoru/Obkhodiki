@@ -50,11 +50,14 @@ public sealed class StrategyAutoSelector
         _settleDelay = settleDelay;
     }
 
+    /// <param name="stopAtFirstPerfect">Quick mode: stop at the first strategy that opens every target
+    /// (callers put the likely winners first, see <see cref="StrategyOrder"/>).</param>
     public async Task<SelectionResult> SelectAsync(
         IReadOnlyList<StrategyDefinition> strategies,
         IReadOnlyList<ProbeTarget> targets,
         IProgress<SelectionProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool stopAtFirstPerfect = false)
     {
         var scores = new List<StrategyScore>();
         for (var i = 0; i < strategies.Count; i++)
@@ -71,6 +74,7 @@ public sealed class StrategyAutoSelector
                 ct).ConfigureAwait(false);
             scores.Add(score);
             progress?.Report(new SelectionProgress(index, strategies.Count, strategy, targets.Count, targets.Count, score));
+            if (stopAtFirstPerfect && score.Total > 0 && score.Passed == score.Total) break;
         }
 
         var best = scores
@@ -119,4 +123,19 @@ public sealed class StrategyAutoSelector
             await _runner.StopAsync().ConfigureAwait(false);
         }
     }
+}
+
+/// <summary>Which strategies to try first: the current one, then those that did well here before, then the rest.</summary>
+public static class StrategyOrder
+{
+    /// <param name="history">Last share of targets each strategy opened on this computer (0..1).</param>
+    public static IReadOnlyList<StrategyDefinition> Prioritize(
+        IReadOnlyList<StrategyDefinition> strategies, IReadOnlyDictionary<string, double> history, string? current) =>
+        strategies
+            .Select((s, i) => (s, i))
+            .OrderByDescending(x => x.s.Name == current)
+            .ThenByDescending(x => history.TryGetValue(x.s.Name, out var r) ? r : -1)
+            .ThenBy(x => x.i)
+            .Select(x => x.s)
+            .ToList();
 }

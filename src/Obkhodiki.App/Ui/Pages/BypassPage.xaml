@@ -44,8 +44,11 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center"
-                       Text="Приложение по очереди включит каждую стратегию и проверит, открываются ли YouTube, Discord и сайты из списка целей. Лучшая будет выбрана автоматически." />
-            <ui:Button Grid.Column="1" Margin="16,0,0,0" Appearance="Primary" Command="{Binding AutoSelectCommand}" MinWidth="160">
+                       Text="Приложение включает стратегии по очереди и проверяет, открываются ли YouTube, Discord и сайты из списка целей. Сначала пробует те, что уже работали, и останавливается на первой, открывшей всё. «Проверить все» — полный прогон." />
+            <StackPanel Grid.Column="1" Margin="16,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <ui:Button Margin="0,0,8,0" Content="Проверить все" Command="{Binding AutoSelectFullCommand}"
+                       Visibility="{Binding IsSelecting, Converter={StaticResource InverseBoolToVisibility}}" />
+            <ui:Button Appearance="Primary" Command="{Binding AutoSelectCommand}" MinWidth="160">
               <ui:Button.Style>
                 <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                   <Setter Property="Content" Value="Подобрать" />
@@ -58,6 +61,7 @@
                 </Style>
               </ui:Button.Style>
             </ui:Button>
+            </StackPanel>
           </Grid>
 
           <StackPanel Margin="0,16,0,0" Visibility="{Binding IsSelecting, Converter={StaticResource BoolToVisibility}}">

@@ -271,7 +271,8 @@ internal sealed partial class AppController : IDisposable
             v => Settings.GameFilter = v,
             mode));
 
-    public Task AutoSelectAsync(IProgress<SelectionProgress>? uiProgress, CancellationToken ct) => Serialized("Подбор стратегии…", silentErrors: false, async () =>
+    /// <param name="full">Check every strategy; otherwise stop at the first one that opens all targets.</param>
+    public Task AutoSelectAsync(IProgress<SelectionProgress>? uiProgress, CancellationToken ct, bool full = false) => Serialized("Подбор стратегии…", silentErrors: false, async () =>
     {
         var engine = _engine ?? throw new InvalidOperationException("Движок Flowseal не установлен.");
         if (!await ResolveConflictsAsync()) return;
@@ -310,7 +311,8 @@ internal sealed partial class AppController : IDisposable
         _autoSelecting = true;
         try
         {
-            result = await Task.Run(() => selector.SelectAsync(engine.Strategies, targets, progress, ct));
+            var order = StrategyOrder.Prioritize(engine.Strategies, Settings.StrategyHistory ?? new(), Settings.SelectedStrategy);
+            result = await Task.Run(() => selector.SelectAsync(order, targets, progress, ct, stopAtFirstPerfect: !full));
         }
         catch (Exception ex)
         {
@@ -323,6 +325,13 @@ internal sealed partial class AppController : IDisposable
         {
             _autoSelecting = false;
         }
+
+        Settings.StrategyHistory ??= new();
+        foreach (var s in result.Scores.Where(s => s.Total > 0 && s.Error is null))
+        {
+            Settings.StrategyHistory[s.Strategy.Name] = (double)s.Passed / s.Total;
+        }
+        _settingsStore.Save(Settings);
 
         if (result.Best is null)
         {

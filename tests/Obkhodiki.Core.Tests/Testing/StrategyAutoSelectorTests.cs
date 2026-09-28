@@ -65,6 +65,23 @@ public class StrategyAutoSelectorTests
         new(runner, probe, s => s.Args, settleDelay: TimeSpan.Zero);
 
     [Fact]
+    public async Task Select_QuickMode_StopsAtFirstThatOpensAll()
+    {
+        var runner = new FakeRunner();
+        var probe = new FakeProbe(runner, new()
+        {
+            ["a"] = t => t.Name == "YouTube" ? Ok(50) : Fail,
+            ["b"] = _ => Ok(300),
+            ["c"] = _ => Ok(10),
+        });
+
+        var result = await Selector(runner, probe).SelectAsync(new[] { S("a"), S("b"), S("c") }, Targets, null, CancellationToken.None, stopAtFirstPerfect: true);
+
+        Assert.Equal("b", result.Best?.Name);
+        Assert.Equal(new[] { "a", "b" }, result.Scores.Select(s => s.Strategy.Name));
+    }
+
+    [Fact]
     public async Task Select_PicksStrategyThatOpensMostTargets()
     {
         var runner = new FakeRunner();
@@ -351,5 +368,21 @@ public class StrategyAutoSelectorTests
         private readonly Action<T> _a;
         public SyncProgress(Action<T> a) => _a = a;
         public void Report(T value) => _a(value);
+    }
+}
+
+public class StrategyOrderTests
+{
+    private static Obkhodiki.Core.Strategies.StrategyDefinition S(string n) => new(n, new[] { n });
+
+    [Fact]
+    public void Current_ThenHistoryBest_ThenRestInOrder()
+    {
+        var list = new[] { S("a"), S("b"), S("c"), S("d"), S("e") };
+        var history = new Dictionary<string, double> { ["d"] = 0.9, ["b"] = 0.5, ["e"] = 0 };
+
+        var order = Obkhodiki.Core.Testing.StrategyOrder.Prioritize(list, history, "c");
+
+        Assert.Equal(new[] { "c", "d", "b", "e", "a" }, order.Select(s => s.Name));
     }
 }

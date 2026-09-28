@@ -35,6 +35,9 @@ public sealed class AppSettings
     /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
     public List<string> VpnDomains { get; set; } = new();
 
+    /// <summary>Share of auto-select targets each strategy opened last time (0..1), so the quick search tries good ones first.</summary>
+    public Dictionary<string, double> StrategyHistory { get; set; } = new();
+
     /// <summary>Window theme: "system", "light" or "dark".</summary>
     public string AppTheme { get; set; } = "system";
 
