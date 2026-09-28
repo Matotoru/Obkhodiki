@@ -28,6 +28,8 @@ public sealed class HttpConnectivityProbe : IConnectivityProbe
         AllowAutoRedirect = false,
         // A system proxy would carry the traffic past the DPI and make every strategy look good.
         UseProxy = false,
+        // Like a browser: one unreachable IP of a host must not fail a target the user can open fine.
+        ConnectCallback = StaggeredConnect.ConnectAsync,
     };
 
     private readonly HttpClient _http;
