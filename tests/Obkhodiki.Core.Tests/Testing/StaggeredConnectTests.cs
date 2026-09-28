@@ -106,8 +106,12 @@ public class StaggeredConnectTests
         {
             using var c = await listener.AcceptTcpClientAsync();
             var s = c.GetStream();
-            var buf = new byte[1024];
-            await s.ReadAsync(buf);
+            // Read the request headers up to the blank line, then answer.
+            var request = new List<byte>();
+            var buf = new byte[1];
+            while (!request.TakeLast(4).SequenceEqual("
+
+"u8.ToArray()) && await s.ReadAsync(buf) == 1) request.Add(buf[0]);
             await s.WriteAsync("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"u8.ToArray());
         });
 
