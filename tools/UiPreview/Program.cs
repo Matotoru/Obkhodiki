@@ -48,6 +48,8 @@ static class Program
             ("home", 740, () => window.Navigate("Home")),
             ("bypass", 900, () => window.Navigate("Bypass")),
             ("games", 740, () => window.Navigate("Games")),
+            ("games-catalog", 1000, () => { shell.Games.LoadCatalogSample(Path.Combine(outDir, "covers")); window.Navigate("Games"); }),
+            ("games-top", 1000, () => window.Navigate("Games")),
             ("games-learning", 1000, () => { shell.Games.LoadLearningSample(); window.Navigate("Games"); }),
             ("vpn", 1900, () => window.Navigate("Vpn")),
             ("vpn-small", 600, () => window.Navigate("Vpn")),
@@ -70,12 +72,12 @@ static class Program
                     window.Height = height;
                     setup();
                     await Settle(window);
-                    if (name.StartsWith("settings", StringComparison.Ordinal))
+                    if (name.StartsWith("settings", StringComparison.Ordinal) || name == "games-top")
                     {
                         ScrollToEnd(window, top: true);
                         await Settle(window);
                     }
-                    if (name.EndsWith("-bottom", StringComparison.Ordinal))
+                    if (name.EndsWith("-bottom", StringComparison.Ordinal) || name == "games-catalog")
                     {
                         ScrollToEnd(window);
                         await Settle(window);

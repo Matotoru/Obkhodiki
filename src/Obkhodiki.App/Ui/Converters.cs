@@ -65,3 +65,12 @@ public sealed class ReferenceEqualsConverter : IMultiValueConverter
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Visible while the value is null (e.g. a fallback shown until a picture loads).</summary>
+public sealed class InverseNullToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is null ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}

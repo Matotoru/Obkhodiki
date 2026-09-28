@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Obkhodiki.Core.Games;
@@ -11,6 +13,71 @@ public sealed record RouteOption(GameRoute Route, string Title);
 public sealed record ProcessChoice(string ExeName, string Title)
 {
     public override string ToString() => Title == Path.GetFileNameWithoutExtension(ExeName) ? ExeName : $"{Title}  ·  {ExeName}";
+}
+
+/// <summary>Card art: the cover picture when there is one, else a gradient in the game's colours.</summary>
+internal static class CardArt
+{
+    public static Brush Gradient(GameCatalogEntry? entry)
+    {
+        var (from, to) = entry?.Colors ?? ("#2B2F3A", "#5B6275");
+        var brush = new LinearGradientBrush((Color)ColorConverter.ConvertFromString(from), (Color)ColorConverter.ConvertFromString(to), 25);
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>Loads a cached cover without locking the file (it may be replaced later).</summary>
+    public static ImageSource? Load(string? path)
+    {
+        if (path is null || !File.Exists(path)) return null;
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            image.UriSource = new Uri(path);
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or FileFormatException or UriFormatException)
+        {
+            return null;
+        }
+    }
+
+    public static string Initials(string name) =>
+        string.Concat(name.Split(new[] { ' ', ':', '-' }, StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+}
+
+/// <summary>A game from the built-in catalog, shown as a card that adds it in one click.</summary>
+public sealed partial class CatalogCardViewModel : ObservableObject
+{
+    private readonly GamesViewModel _owner;
+
+    internal CatalogCardViewModel(GamesViewModel owner, GameCatalogEntry entry)
+    {
+        _owner = owner;
+        Entry = entry;
+        Gradient = CardArt.Gradient(entry);
+    }
+
+    public GameCatalogEntry Entry { get; }
+    public string Name => Entry.Name;
+    public string Initials => CardArt.Initials(Entry.Name);
+    public string Subtitle => Entry.NeedsRecording ? $"{Entry.Publisher} · нужна запись одного матча" : $"{Entry.Publisher} · работает сразу";
+    public Brush Gradient { get; }
+
+    [ObservableProperty] private ImageSource? _cover;
+    [ObservableProperty] private bool _isAdded;
+
+    public string AddText => IsAdded ? "Добавлена" : "Добавить";
+
+    partial void OnIsAddedChanged(bool value) => OnPropertyChanged(nameof(AddText));
+
+    [RelayCommand]
+    private Task AddAsync() => IsAdded ? Task.CompletedTask : _owner.AddFromCatalogAsync(this);
 }
 
 public sealed partial class GameCardViewModel : ObservableObject
@@ -32,6 +99,11 @@ public sealed partial class GameCardViewModel : ObservableObject
     [ObservableProperty] private bool _enabled;
     [ObservableProperty] private RouteOption? _route;
     [ObservableProperty] private bool _vpnAvailable;
+    [ObservableProperty] private ImageSource? _cover;
+    [ObservableProperty] private Brush _gradient = CardArt.Gradient(null);
+    [ObservableProperty] private string _initials = "";
+    [ObservableProperty] private bool _hasCustomCover;
+    private string? _coverPath;
 
     partial void OnEnabledChanged(bool value)
     {
@@ -54,7 +126,47 @@ public sealed partial class GameCardViewModel : ObservableObject
         Enabled = p.Enabled;
         Route = routes.First(r => r.Route == p.Route);
         VpnAvailable = vpnAvailable;
+        var entry = GameCatalog.For(p);
+        Gradient = CardArt.Gradient(entry);
+        Initials = CardArt.Initials(p.Name);
+        HasCustomCover = File.Exists(AppController.CustomCoverPath(p.Id));
+        var path = AppController.CoverFor(p.Id, entry);
+        if (path != _coverPath)
+        {
+            _coverPath = path;
+            Cover = CardArt.Load(path);
+        }
         _syncing = false;
+    }
+
+    [RelayCommand]
+    private async Task ChooseCoverAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = $"Картинка для «{Name}»",
+            Filter = "Картинки (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+        };
+        if (dialog.ShowDialog() != true || _shell.Controller is not { } c) return;
+        try
+        {
+            await c.SetCustomCoverAsync(Id, dialog.FileName);
+            _coverPath = null;
+            _shell.Refresh();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or NotSupportedException or FileFormatException or UnauthorizedAccessException or ArgumentException)
+        {
+            _shell.AddEvent("Картинка", "Не удалось открыть картинку: " + ex.Message, EventKind.Error);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveCover()
+    {
+        _shell.Controller?.RemoveCustomCover(Id);
+        _coverPath = null;
+        _shell.Refresh();
     }
 
     [RelayCommand]
@@ -80,6 +192,8 @@ public sealed partial class GamesViewModel : ObservableObject
     private readonly System.Windows.Threading.DispatcherTimer _statsTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     public ObservableCollection<GameCardViewModel> Profiles { get; } = new();
+    public IReadOnlyList<CatalogCardViewModel> Catalog { get; }
+    private readonly HashSet<string> _coversRequested = new();
     public ObservableCollection<ProcessChoice> Processes { get; } = new();
 
     public IReadOnlyList<RouteOption> RouteOptions { get; } = new[]
@@ -111,6 +225,27 @@ public sealed partial class GamesViewModel : ObservableObject
         _shell = shell;
         _statsTimer.Tick += (_, _) => UpdateStats();
         Profiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProfiles));
+        Catalog = GameCatalog.Entries.Select(e => new CatalogCardViewModel(this, e)).ToList();
+    }
+
+    internal async Task AddFromCatalogAsync(CatalogCardViewModel card)
+    {
+        if (_shell.Controller is not { } c) return;
+        var entry = card.Entry;
+        // The exe that is running now, if the game is open (some games ship several).
+        var running = entry.ProcessNames.FirstOrDefault(exe =>
+        {
+            var procs = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe));
+            foreach (var p in procs) p.Dispose();
+            return procs.Length > 0;
+        });
+        var profile = await c.AddCatalogGameAsync(entry, running);
+        _shell.Refresh();
+        if (profile is null) return;
+        _shell.AddEvent(entry.Name, entry.NeedsRecording
+            ? "Добавлена. Запустите игру и запишите один матч — так программа узнает её серверы."
+            : "Добавлена и включена: адреса серверов получены.", EventKind.Success);
+        if (entry.NeedsRecording) OpenLearning(Profiles.FirstOrDefault(p => p.Id == profile.Id));
     }
 
     partial void OnIsRecordingChanged(bool value) => NotifyButtons();
@@ -148,12 +283,36 @@ public sealed partial class GamesViewModel : ObservableObject
         }
         for (var i = 0; i < profiles.Count; i++) Profiles[i].Sync(profiles[i], vpn, RouteOptions);
 
+        var added = profiles.Select(GameCatalog.For).Where(e => e is not null).Select(e => e!.Id).ToHashSet();
+        foreach (var card in Catalog)
+        {
+            card.IsAdded = added.Contains(card.Entry.Id);
+            card.Cover ??= CardArt.Load(AppController.CoverFor(null, card.Entry));
+            if (card.Cover is null && card.Entry.SteamAppId is not null && _coversRequested.Add(card.Entry.Id)) _ = FetchCoverAsync(c, card);
+        }
+
         // Recording stopped elsewhere (tray, or the controller gave up): reflect it here.
         if (IsRecording && !IsWorking && !c.IsLearning)
         {
             _statsTimer.Stop();
             IsRecording = false;
             UpdateStats();
+        }
+    }
+
+    private async Task FetchCoverAsync(AppController c, CatalogCardViewModel card)
+    {
+        try
+        {
+            if (await c.EnsureCoverAsync(card.Entry) is { } path)
+            {
+                card.Cover = CardArt.Load(path);
+                _shell.Refresh();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Cover for {card.Entry.Id} failed", ex);
         }
     }
 
@@ -337,6 +496,15 @@ public sealed partial class GamesViewModel : ObservableObject
             card.Sync(new GameProfile { Id = id, Name = name, Enabled = on, Route = route, ProcessName = details.Split(' ')[0] }, true, RouteOptions);
             card.Details = details;
             Profiles.Add(card);
+        }
+    }
+
+    internal void LoadCatalogSample(string coversDir)
+    {
+        foreach (var card in Catalog)
+        {
+            card.IsAdded = card.Entry.Id is "wardogs" or "cs2";
+            if (card.Entry.SteamAppId is { } app) card.Cover = CardArt.Load(Path.Combine(coversDir, $"steam-{app}.png"));
         }
     }
 

@@ -19,6 +19,7 @@
       <local:CountToVisibilityConverter x:Key="CountToVisibility" />
       <local:EventKindToSymbolConverter x:Key="EventKindToSymbol" />
       <local:ReferenceEqualsConverter x:Key="ReferenceEquals" />
+      <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibility" />
 
       <!-- Shared layout rhythm for all pages. -->
       <Thickness x:Key="PagePadding">32,8,32,32</Thickness>

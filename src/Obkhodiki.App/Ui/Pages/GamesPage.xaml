@@ -92,8 +92,16 @@
                   <ColumnDefinition Width="Auto" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="40" Height="40" CornerRadius="8" Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                  <ui:SymbolIcon Symbol="Games24" FontSize="20" />
+                <Border Width="112" Height="52" CornerRadius="6" Background="{Binding Gradient}" ClipToBounds="True">
+                  <Grid>
+                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" FontWeight="Bold" Foreground="White" Opacity="0.9"
+                               Text="{Binding Initials}" Visibility="{Binding Cover, Converter={StaticResource InverseNullToVisibility}}" />
+                    <Image Source="{Binding Cover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality">
+                      <Image.Clip>
+                        <RectangleGeometry Rect="0,0,112,52" RadiusX="6" RadiusY="6" />
+                      </Image.Clip>
+                    </Image>
+                  </Grid>
                 </Border>
                 <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
                   <TextBlock FontSize="15" FontWeight="SemiBold" Text="{Binding Name}" />
@@ -121,6 +129,9 @@
                     <ContextMenu>
                       <MenuItem Header="Дообучить (записать ещё)" Command="{Binding RelearnCommand}" />
                       <MenuItem Header="Открыть список адресов" Command="{Binding OpenAddressesCommand}" />
+                      <MenuItem Header="Своя картинка…" Command="{Binding ChooseCoverCommand}" />
+                      <MenuItem Header="Убрать свою картинку" Command="{Binding RemoveCoverCommand}"
+                                Visibility="{Binding HasCustomCover, Converter={StaticResource BoolToVisibility}}" />
                       <Separator />
                       <MenuItem Header="Удалить" Command="{Binding DeleteCommand}" />
                     </ContextMenu>
@@ -132,12 +143,70 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <ui:Card Padding="28" Visibility="{Binding HasProfiles, Converter={StaticResource InverseBoolToVisibility}}">
+      <ui:Card Padding="28" Margin="{StaticResource CardSpacing}" Visibility="{Binding HasProfiles, Converter={StaticResource InverseBoolToVisibility}}">
         <StackPanel HorizontalAlignment="Center">
           <ui:SymbolIcon Symbol="Games24" FontSize="40" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
           <TextBlock Margin="0,10,0,0" HorizontalAlignment="Center" FontWeight="SemiBold" Text="Игр пока нет" />
           <TextBlock HorizontalAlignment="Center" Style="{StaticResource Caption}" Text="Нажмите «Добавить игру», чтобы записать её серверы." />
         </StackPanel>
       </ui:Card>
+
+      <!-- Built-in profiles: one click instead of recording. -->
+      <TextBlock Style="{StaticResource SectionTitle}" Text="Популярные игры" />
+      <TextBlock Margin="0,-4,0,12" Style="{StaticResource Caption}"
+                 Text="«Работает сразу» — адреса серверов программа берёт из открытых реестров сетей. Для остальных после добавления запустите игру и запишите один матч." />
+      <ItemsControl ItemsSource="{Binding Catalog}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <ui:Card Width="248" Margin="0,0,12,12" Padding="0">
+              <StackPanel>
+                <Border Height="116" CornerRadius="8,8,0,0" Background="{Binding Gradient}" ClipToBounds="True">
+                  <Grid>
+                    <TextBlock Margin="14" VerticalAlignment="Bottom" FontSize="22" FontWeight="Bold" Foreground="White" TextWrapping="Wrap"
+                               Text="{Binding Name}" Visibility="{Binding Cover, Converter={StaticResource InverseNullToVisibility}}">
+                      <TextBlock.Effect>
+                        <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.5" />
+                      </TextBlock.Effect>
+                    </TextBlock>
+                    <Image Source="{Binding Cover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality">
+                      <Image.Clip>
+                        <RectangleGeometry Rect="0,0,248,116" RadiusX="8" RadiusY="8" />
+                      </Image.Clip>
+                    </Image>
+                  </Grid>
+                </Border>
+                <Grid Margin="14,10,14,12" Height="52">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Style="{StaticResource Caption}" Text="{Binding Subtitle}" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ui:Button Grid.Column="1" VerticalAlignment="Center" Content="{Binding AddText}" Command="{Binding AddCommand}"
+                             IsEnabled="{Binding IsAdded, Converter={StaticResource InverseBool}}">
+                    <ui:Button.Style>
+                      <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                        <Setter Property="Appearance" Value="Primary" />
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsAdded}" Value="True">
+                            <Setter Property="Appearance" Value="Secondary" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </ui:Button.Style>
+                  </ui:Button>
+                </Grid>
+              </StackPanel>
+            </ui:Card>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
     </StackPanel>
 </Page>
