@@ -388,7 +388,26 @@ internal sealed partial class AppController : IDisposable
         UserLists.EnsureReferenced(engine.Strategies, AppPaths.UserLists);
         var args = BuildArgs(strategy, CompileGameRules());
 
-        await _runner.StartAsync(args, CancellationToken.None).ConfigureAwait(false);
+        if (EngineFiles.Missing(engine.BinDir) is { Count: > 0 } missing)
+        {
+            Log.Error($"Engine files missing: {string.Join(", ", missing)}", null);
+            throw new InvalidOperationException(EngineFiles.MissingMessage(missing, engine.BinDir));
+        }
+        try
+        {
+            await _runner.StartAsync(args, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex) when (EngineFiles.ExplainStartFailure(ex.Message, engine.BinDir) is { } hint)
+        {
+            Log.Error("winws failed to start", ex);
+            throw new InvalidOperationException(hint, ex);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // The exe itself was removed or blocked between the check and the start.
+            Log.Error("winws could not be started", ex);
+            throw new InvalidOperationException(EngineFiles.MissingMessage(new[] { "winws.exe" }, engine.BinDir), ex);
+        }
         Log.Info($"winws started: {strategy.Name}, game filter {Settings.GameFilter}, Flowseal {engine.Version}, " +
                  $"sha256 {FileSha256(engine.WinwsPath)}, args: {string.Join(' ', args)}");
     }
