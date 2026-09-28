@@ -13,7 +13,8 @@ public sealed record VpnSourceView(
     DateTimeOffset? Expire,
     DateTimeOffset? FetchedAt,
     int Skipped,
-    bool HasInsecure);
+    bool HasInsecure,
+    SubscriptionAlert? Alert = null);
 
 /// <summary>Subscriptions, server pings and automatic choice of the fastest server.</summary>
 internal sealed partial class AppController

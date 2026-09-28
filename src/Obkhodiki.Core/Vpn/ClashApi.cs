@@ -14,6 +14,45 @@ public sealed record ClashApiOptions(int Port, string Secret)
     public override string ToString() => $"127.0.0.1:{Port}";
 }
 
+/// <param name="Chains">Outbounds the connection went through, innermost first (e.g. server tag, "proxy"); ["direct"] when not via the VPS.</param>
+public sealed record ClashConnection(string Id, long Upload, long Download, IReadOnlyList<string> Chains)
+{
+    public bool ViaVpn => Chains.Count > 0 && !Chains.Contains("direct") && !Chains.Contains("block");
+}
+
+/// <summary>
+/// Adds up the traffic of connections that went through the VPS. The API only lists open connections, so the
+/// counters are sampled regularly and only growth is added; the last bytes of a connection that closes between
+/// two samples are missed (a small undercount).
+/// </summary>
+public sealed class VpnTrafficMeter
+{
+    private Dictionary<string, (long Up, long Down)> _seen = new();
+
+    public long Upload { get; private set; }
+    public long Download { get; private set; }
+
+    public void Update(IReadOnlyList<ClashConnection> connections)
+    {
+        var next = new Dictionary<string, (long Up, long Down)>();
+        foreach (var c in connections.Where(c => c.ViaVpn))
+        {
+            var before = _seen.TryGetValue(c.Id, out var b) ? b : (0L, 0L);
+            Upload += Math.Max(0, c.Upload - before.Item1);
+            Download += Math.Max(0, c.Download - before.Item2);
+            next[c.Id] = (c.Upload, c.Download);
+        }
+        _seen = next;
+    }
+
+    public void Reset()
+    {
+        _seen = new();
+        Upload = 0;
+        Download = 0;
+    }
+}
+
 /// <summary>Switches the active server and measures servers through the running sing-box.</summary>
 public sealed class ClashApiClient
 {
@@ -43,6 +82,39 @@ public sealed class ClashApiClient
         request.Content = JsonContent.Create(new { name = tag });
         using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Open connections with their byte counters and outbound chain, or null when the API did not answer.</summary>
+    public async Task<IReadOnlyList<ClashConnection>?> ConnectionsAsync(CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Get, "/connections");
+        try
+        {
+            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            return ParseConnections(doc.RootElement);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    internal static IReadOnlyList<ClashConnection> ParseConnections(JsonElement root)
+    {
+        var result = new List<ClashConnection>();
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("connections", out var list) || list.ValueKind != JsonValueKind.Array) return result;
+        foreach (var c in list.EnumerateArray())
+        {
+            if (c.ValueKind != JsonValueKind.Object || !c.TryGetProperty("id", out var id) || id.GetString() is not { } idText) continue;
+            long Counter(string name) => c.TryGetProperty(name, out var v) && v.TryGetInt64(out var n) && n >= 0 ? n : 0;
+            var chains = c.TryGetProperty("chains", out var ch) && ch.ValueKind == JsonValueKind.Array
+                ? ch.EnumerateArray().Select(e => e.GetString()).Where(e => e is not null).Select(e => e!).ToList()
+                : new List<string>();
+            result.Add(new ClashConnection(idText, Counter("upload"), Counter("download"), chains));
+        }
+        return result;
     }
 
     /// <summary>Round trip of an HTTPS request through the server, or null when it failed or timed out.</summary>

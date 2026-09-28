@@ -87,6 +87,9 @@ public sealed partial class VpnViewModel : ObservableObject
     [ObservableProperty] private bool _isSubscription;
     [ObservableProperty] private string? _sourceDetails;
     [ObservableProperty] private bool _hasInsecure;
+    [ObservableProperty] private string? _alertText;
+    [ObservableProperty] private bool _alertSevere;
+    [ObservableProperty] private string? _trafficText;
     [ObservableProperty] private string? _pingStatus;
     [ObservableProperty] private bool _isPinging;
     [ObservableProperty] private bool _isBusy;
@@ -174,6 +177,12 @@ public sealed partial class VpnViewModel : ObservableObject
         var info = c.VpnSourceInfo;
         IsSubscription = info?.IsSubscription == true;
         HasInsecure = info?.HasInsecure == true;
+        AlertText = info?.Alert?.Text;
+        AlertSevere = info?.Alert?.Severe == true;
+        var (up, down) = c.VpnSessionTraffic;
+        TrafficText = up + down > 0
+            ? $"Через VPS с запуска программы: ↓ {SubscriptionAlerts.Size(down)} · ↑ {SubscriptionAlerts.Size(up)}"
+            : null;
         if (info is null || !info.IsSubscription)
         {
             SourceDetails = null;
@@ -579,7 +588,9 @@ public sealed partial class VpnViewModel : ObservableObject
         AutoBest = true;
         _syncing = false;
         IsSubscription = true;
-        SourceDetails = "трафик 12.4 ГБ из 100.0 ГБ · до 01.12.2026 · обновлена 27.09 13:10";
+        SourceDetails = "трафик 92.4 ГБ из 100.0 ГБ · до 01.12.2026 · обновлена 27.09 13:10";
+        AlertText = "Израсходовано 92% трафика подписки (92,4 ГБ из 100,0 ГБ).";
+        TrafficText = "Через VPS с запуска программы: ↓ 1,4 ГБ · ↑ 96 МБ";
         foreach (var (name, details, ping, active, down) in new[]
                  {
                      ("Нидерланды", "VLESS Reality · nl.example.com:443", "48 мс", true, false),

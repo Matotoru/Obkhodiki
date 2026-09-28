@@ -126,9 +126,11 @@ internal sealed partial class AppController
         _source = source;
         _servers = source?.Servers().Where(s => !_rejectedServers.Contains(s.Tag)).ToList() ?? (IReadOnlyList<VpnServerEntry>)Array.Empty<VpnServerEntry>();
         VpnServerName = source is null ? null : source.Describe();
+        var alert = source is { IsSubscription: true } ? SubscriptionAlerts.Check(source.Used, source.Total, source.Expire, DateTimeOffset.Now) : null;
         VpnSourceInfo = source is null ? null : new VpnSourceView(
             source.IsSubscription, source.Describe(), source.Used, source.Total, source.Expire, source.FetchedAt,
-            source.SkippedCount, _servers.Any(s => s.Server.Insecure));
+            source.SkippedCount, _servers.Any(s => s.Server.Insecure), alert);
+        AnnounceSubscriptionAlert(alert);
     }
 
     // ---------- settings the UI changes ----------
@@ -742,6 +744,36 @@ internal sealed partial class AppController
         return result;
     }
 
+    private readonly VpnTrafficMeter _vpnMeter = new();
+
+    /// <summary>Traffic that went through the VPS since the app started.</summary>
+    public (long Upload, long Download) VpnSessionTraffic => (_vpnMeter.Upload, _vpnMeter.Download);
+
+    private void AnnounceSubscriptionAlert(SubscriptionAlert? alert)
+    {
+        if (alert is null || alert.Key == Settings.VpnAlertShown) return;
+        Settings.VpnAlertShown = alert.Key;
+        _settingsStore.Save(Settings);
+        Notify?.Invoke("Подписка VPS", alert.Text, alert.Severe ? ToolTipIcon.Error : ToolTipIcon.Warning);
+    }
+
+    private async Task MeasureVpnTrafficAsync()
+    {
+        if (!IsVpnRunning || _clash is not { } clash) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        if (await clash.ConnectionsAsync(cts.Token) is not { } connections) return;
+        var before = _vpnMeter.Upload + _vpnMeter.Download;
+        _vpnMeter.Update(connections);
+        // The window shows the counter; refresh it now and then, not on every sample.
+        if (_vpnMeter.Upload + _vpnMeter.Download != before && DateTime.UtcNow - _trafficShownAt > TimeSpan.FromSeconds(15))
+        {
+            _trafficShownAt = DateTime.UtcNow;
+            Changed();
+        }
+    }
+
+    private DateTime _trafficShownAt = DateTime.MinValue;
+
     // ---------- auto route: once per game start ----------
 
     private async Task WatchGamesAsync()
@@ -776,6 +808,7 @@ internal sealed partial class AppController
                 }
             }
             if (changed) await ApplyVpnAsync(interactive: false);
+            await MeasureVpnTrafficAsync();
             // Server pings, switching and downloads wait until no game is running.
             GameRunning = anyGame;
             if (!anyGame) await VpnUpkeepAsync();

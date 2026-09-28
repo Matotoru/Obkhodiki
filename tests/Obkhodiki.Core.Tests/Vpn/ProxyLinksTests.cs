@@ -523,3 +523,89 @@ public class BypassRulesTests
         Assert.Equal(new[] { "bank.ru", "8.8.8.8/32" }, plan.BypassEntries);
     }
 }
+
+public class SubscriptionAlertsTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
+    private const long Gb = 1L << 30;
+
+    [Fact]
+    public void AllFine_NoAlert()
+    {
+        Assert.Null(SubscriptionAlerts.Check(10 * Gb, 100 * Gb, Now.AddDays(20), Now));
+        Assert.Null(SubscriptionAlerts.Check(null, null, null, Now));
+    }
+
+    [Fact]
+    public void Expired_Severe()
+    {
+        var a = SubscriptionAlerts.Check(1, 100 * Gb, Now.AddHours(-1), Now)!;
+        Assert.True(a.Severe);
+        Assert.StartsWith("expired:", a.Key);
+    }
+
+    [Fact]
+    public void OutOfTraffic_Severe_BeatsExpirySoon()
+    {
+        var a = SubscriptionAlerts.Check(100 * Gb, 100 * Gb, Now.AddDays(1), Now)!;
+        Assert.True(a.Severe);
+        Assert.StartsWith("traffic-out:", a.Key);
+    }
+
+    [Theory]
+    [InlineData(2.5, "через 3 дня")]
+    [InlineData(0.5, "меньше чем через сутки")]
+    public void ExpiresSoon_Warning(double days, string expected)
+    {
+        var a = SubscriptionAlerts.Check(1, 100 * Gb, Now.AddDays(days), Now)!;
+        Assert.False(a.Severe);
+        Assert.Contains(expected, a.Text);
+    }
+
+    [Fact]
+    public void Traffic90_Warning_WithPercent()
+    {
+        var a = SubscriptionAlerts.Check(92 * Gb, 100 * Gb, null, Now)!;
+        Assert.False(a.Severe);
+        Assert.Contains("92%", a.Text);
+    }
+
+    [Fact]
+    public void UnlimitedTotal_NoTrafficAlert()
+    {
+        Assert.Null(SubscriptionAlerts.Check(500 * Gb, 0, null, Now));
+    }
+}
+
+public class VpnTrafficMeterTests
+{
+    private static ClashConnection Via(string id, long up, long down) => new(id, up, down, new[] { "s-1", "proxy" });
+    private static ClashConnection Direct(string id, long up, long down) => new(id, up, down, new[] { "direct" });
+
+    [Fact]
+    public void CountsOnlyVpnGrowth_AcrossSamples()
+    {
+        var m = new VpnTrafficMeter();
+        m.Update(new[] { Via("a", 10, 100), Direct("b", 1000, 1000) });
+        m.Update(new[] { Via("a", 15, 180), Via("c", 5, 5) });
+        m.Update(Array.Empty<ClashConnection>());
+        m.Update(new[] { Via("c", 1, 1) }); // "c" reappearing after it was gone counts as new
+
+        Assert.Equal(10 + 5 + 5 + 1, m.Upload);
+        Assert.Equal(100 + 80 + 5 + 1, m.Download);
+    }
+
+    [Fact]
+    public void ParsesClashConnections()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(
+            """{"downloadTotal":5,"uploadTotal":3,"connections":[{"id":"x","upload":7,"download":9,"chains":["s-abc","proxy"]},{"id":"y","upload":1,"download":2,"chains":["direct"]},{"bad":1}]}""");
+
+        var list = ClashApiClient.ParseConnections(doc.RootElement);
+
+        Assert.Equal(2, list.Count);
+        Assert.True(list[0].ViaVpn);
+        Assert.False(list[1].ViaVpn);
+        Assert.Equal(9, list[0].Download);
+    }
+}

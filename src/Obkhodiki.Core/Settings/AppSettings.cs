@@ -35,6 +35,9 @@ public sealed class AppSettings
     /// <summary>Sites (domains incl. subdomains) that always go through the VPS.</summary>
     public List<string> VpnDomains { get; set; } = new();
 
+    /// <summary>Last subscription warning shown (SubscriptionAlert.Key), so each one is announced once.</summary>
+    public string? VpnAlertShown { get; set; }
+
     /// <summary>Programs that never go through the VPS, in either mode (beats every other rule).</summary>
     public List<string> VpnBypassProcesses { get; set; } = new();
 

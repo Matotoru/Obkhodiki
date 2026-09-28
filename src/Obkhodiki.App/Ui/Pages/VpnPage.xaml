@@ -75,6 +75,7 @@
             <TextBlock Style="{StaticResource Caption}" Text="{Binding SourceDetails}" Visibility="{Binding SourceDetails, Converter={StaticResource NullToVisibility}}" />
             <TextBlock Style="{StaticResource Caption}" Foreground="#FFC857" Text="Есть серверы без проверки сертификата"
                        Visibility="{Binding HasInsecure, Converter={StaticResource BoolToVisibility}}" />
+            <TextBlock Style="{StaticResource Caption}" Text="{Binding TrafficText}" Visibility="{Binding TrafficText, Converter={StaticResource NullToVisibility}}" />
           </StackPanel>
         </ui:CardControl.Header>
         <StackPanel Orientation="Horizontal">
@@ -84,6 +85,20 @@
           <ui:Button Content="Удалить" Command="{Binding RemoveServerCommand}" />
         </StackPanel>
       </ui:CardControl>
+
+      <ui:InfoBar Margin="{StaticResource CardSpacing}" IsClosable="False" IsOpen="True" Title="Подписка" Message="{Binding AlertText}"
+                  Visibility="{Binding AlertText, Converter={StaticResource NullToVisibility}}">
+        <ui:InfoBar.Style>
+          <Style TargetType="ui:InfoBar" BasedOn="{StaticResource {x:Type ui:InfoBar}}">
+            <Setter Property="Severity" Value="Warning" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding AlertSevere}" Value="True">
+                <Setter Property="Severity" Value="Error" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </ui:InfoBar.Style>
+      </ui:InfoBar>
 
       <ui:Card Padding="20" Margin="{StaticResource CardSpacing}" Visibility="{Binding ShowServerForm, Converter={StaticResource BoolToVisibility}}">
         <StackPanel>
