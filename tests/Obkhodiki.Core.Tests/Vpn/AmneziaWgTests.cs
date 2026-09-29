@@ -123,7 +123,7 @@ public class AmneziaWgTests
         var a = "# Server A\n" + Config();
         var b = "# Server B\n" + Config("203.0.113.8:51820");
         Assert.NotEqual(VpnServerEntry.TagFor(a), VpnServerEntry.TagFor(b));
-        Assert.Equal(VpnServerEntry.TagFor(Config()), VpnServerEntry.TagFor(Config().Replace("\n", "\r\n")));
+        Assert.Equal(VpnServerEntry.TagFor(Config().ReplaceLineEndings("\n")), VpnServerEntry.TagFor(Config().ReplaceLineEndings("\r\n")));
     }
 
     // ---------- vpn:// keys ----------

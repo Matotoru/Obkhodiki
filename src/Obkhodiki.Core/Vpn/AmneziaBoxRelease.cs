@@ -18,8 +18,8 @@ public static class AmneziaBox
     public const string ReleaseTag = "amnezia-box-v" + Version;
 
     // Filled from the workflow's output after it built the release (see .github/workflows/amnezia-box.yml).
-    private const string Amd64Sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
-    private const string Arm64Sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+    private const string Amd64Sha256 = "b91797a2b3871b3ce72d57d42b9f8db0c5509f650a947f9f3f4af38440c0f4c2";
+    private const string Arm64Sha256 = "bc8cbcb84b50a29b3e4e5f151ea4a27ba7a836e379a6e1da23f850a25cc8a8e3";
 
     public static string AssetName(Architecture architecture) =>
         $"amnezia-box-{Version}-windows-{(architecture == Architecture.Arm64 ? "arm64" : "amd64")}.zip";
