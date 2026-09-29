@@ -79,6 +79,18 @@ public class AmneziaWgTests
         Assert.Null(o["peers"]![0]!["preshared_key"]);
     }
 
+    [Theory]
+    [InlineData("off", 0)]
+    [InlineData("0", 0)]
+    [InlineData("15s", 15)]
+    [InlineData("abc", AwgServer.DefaultKeepalive)]
+    [InlineData("99999999", AwgServer.DefaultKeepalive)]
+    public void ParseConfig_OddKeepalive_Tolerated(string value, int expected)
+    {
+        var server = (AwgServer)ProxyLinks.Parse(Config().Replace("PersistentKeepalive = 25", "PersistentKeepalive = " + value));
+        Assert.Equal(expected, server.Keepalive);
+    }
+
     [Fact]
     public void ToOutbound_ResolvesNamesAndBracketsIpv6()
     {

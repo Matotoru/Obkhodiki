@@ -152,11 +152,14 @@ public sealed record AwgServer(
         }
         if (mtuValue is < 576 or > 1500) throw new FormatException("Неверное значение MTU в конфиге.");
 
+        // Only a hint for NAT: "off", "25s" or anything odd falls back instead of rejecting the whole config.
         var keepalive = DefaultKeepalive;
-        if (peer.TryGetValue("PersistentKeepalive", out var ka) && ka.Length > 0 &&
-            (!int.TryParse(ka, NumberStyles.None, CultureInfo.InvariantCulture, out keepalive) || keepalive > 65535))
+        if (peer.TryGetValue("PersistentKeepalive", out var ka) && ka.Length > 0)
         {
-            throw new FormatException("Неверное значение PersistentKeepalive в конфиге.");
+            var digits = new string(ka.TakeWhile(char.IsAsciiDigit).ToArray());
+            keepalive = ka.Equals("off", StringComparison.OrdinalIgnoreCase) ? 0
+                : int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var k) && k <= 65535 ? k
+                : DefaultKeepalive;
         }
 
         return new AwgServer(

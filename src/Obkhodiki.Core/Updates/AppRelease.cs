@@ -57,6 +57,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.8.1", new[]
+        {
+            "Конфиги AmneziaWG/WireGuard с необычным PersistentKeepalive (например, off) больше не отклоняются.",
+        }),
         new Entry("0.8.0", new[]
         {
             "AmneziaVPN: на странице VPS принимаются ключи vpn:// и конфиги AmneziaWG/WireGuard (.conf, кнопка «Из файла»). Для AmneziaWG программа один раз скачивает amnezia-box — версию sing-box от команды Amnezia.",
