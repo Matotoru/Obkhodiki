@@ -53,7 +53,7 @@ public abstract partial class GitHubReleaseSource
         _displayName = ownerRepo;
     }
 
-    public async Task<ReleaseInfo> GetLatestAsync(CancellationToken ct)
+    public virtual async Task<ReleaseInfo> GetLatestAsync(CancellationToken ct)
     {
         // HttpClient (since .NET 10) no longer checks an already-cancelled token before calling the handler.
         ct.ThrowIfCancellationRequested();

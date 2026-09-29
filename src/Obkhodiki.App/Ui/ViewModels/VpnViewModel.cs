@@ -375,6 +375,37 @@ public sealed partial class VpnViewModel : ObservableObject
         _shell.Refresh();
     }
 
+    /// <summary>A config file exported from AmneziaVPN (AmneziaWG/WireGuard .conf) or a text file with a vpn:// key.</summary>
+    [RelayCommand]
+    private async Task LoadServerFileAsync()
+    {
+        if (_shell.Controller is null) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Конфиг сервера",
+            Filter = "Конфиг AmneziaWG / WireGuard (*.conf)|*.conf|Ключ Amnezia (*.vpn; *.txt)|*.vpn;*.txt|Все файлы (*.*)|*.*",
+        };
+        if (dialog.ShowDialog() != true) return;
+        ServerError = null;
+        string text;
+        try
+        {
+            if (new FileInfo(dialog.FileName).Length > 64 * 1024)
+            {
+                ServerError = "Файл слишком большой для конфига сервера.";
+                return;
+            }
+            text = await File.ReadAllTextAsync(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ServerError = "Не удалось прочитать файл: " + ex.Message;
+            return;
+        }
+        ServerLink = text.Trim();
+        await SaveServerAsync();
+    }
+
     [RelayCommand]
     private async Task RemoveServerAsync()
     {

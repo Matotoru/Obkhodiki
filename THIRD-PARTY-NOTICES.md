@@ -15,6 +15,7 @@ them unmodified. Their licenses apply to them; see the linked repositories for f
 | [WinDivert](https://github.com/basil00/WinDivert) | basil00 | LGPL-3.0 or GPL-2.0 | Packet capture driver (shipped inside the zapret build) |
 | [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) | Flowseal | MIT | Telegram proxy |
 | [sing-box](https://github.com/SagerNet/sing-box) | nekohasekai (SagerNet) | GPL-3.0-or-later | VPS tunnel |
+| [amnezia-box](https://github.com/amnezia-vpn/amnezia-box) | Amnezia VPN (sing-box fork) | GPL-3.0-or-later | AmneziaWG tunnel; built unmodified from source by `.github/workflows/amnezia-box.yml` |
 | [sing-geosite](https://github.com/SagerNet/sing-geosite), [sing-geoip](https://github.com/SagerNet/sing-geoip) | nekohasekai (SagerNet) | GPL-3.0-or-later | Routing rule-sets (category-ru, geoip-ru, YouTube, Discord, …) |
 | [russia-v2ray-rules-dat](https://github.com/runetfreedom/russia-v2ray-rules-dat) | runetfreedom | GPL-3.0 | Routing rule-sets (ru-blocked) |
 

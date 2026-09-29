@@ -43,7 +43,7 @@ internal sealed partial class AppController
         if (Settings.GameProfiles.Count == 0) Line("нет");
         Line();
         Line("== VPS ==");
-        Line($"sing-box: {SingBoxVersion ?? "не установлен"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning}; весь трафик: {Settings.VpnFullTunnel}");
+        Line($"sing-box: {SingBoxVersion ?? "не установлен"}; amnezia-box: {AmneziaBoxVersion ?? "нет"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning}; весь трафик: {Settings.VpnFullTunnel}");
         Line($"Источник: {VpnServerName ?? "не задан"}");
         foreach (var s in VpnServers)
         {

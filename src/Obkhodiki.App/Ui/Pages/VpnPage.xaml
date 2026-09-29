@@ -104,15 +104,17 @@
         <StackPanel>
           <TextBlock FontSize="16" FontWeight="SemiBold" Text="Подписка или сервер" />
           <TextBlock Margin="0,4,0,12" Style="{StaticResource Caption}"
-                     Text="Вставьте ссылку подписки из 3x-ui (https://…/sub/…) или ссылку одного сервера: vless://, vmess://, hysteria2://, trojan://, ss://. Она хранится зашифрованной в папке, доступной только администраторам." />
+                     Text="Вставьте ссылку подписки из 3x-ui (https://…/sub/…), ссылку одного сервера (vless://, vmess://, hysteria2://, trojan://, ss://) или ключ AmneziaVPN (vpn://). Конфиг AmneziaWG или WireGuard (.conf) загрузите кнопкой «Из файла». Всё хранится зашифрованным в папке, доступной только администраторам." />
           <TextBlock Margin="0,0,0,12" Style="{StaticResource Caption}" Text="Текущая подписка не удалится: она останется в «Сохранённых», и на неё можно будет переключиться."
                      Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}" />
-          <ui:PasswordBox PlaceholderText="https://…/sub/…  или  vless://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
+          <ui:PasswordBox PlaceholderText="https://…/sub/…,  vless://…  или  vpn://…" Password="{Binding ServerLink, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" />
           <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" Text="{Binding ServerError}"
                      Visibility="{Binding ServerError, Converter={StaticResource NullToVisibility}}" />
           <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <ui:Button Content="Отмена" Command="{Binding CancelEditServerCommand}" Margin="0,0,8,0"
                        Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}" />
+            <ui:Button Content="Из файла…" Command="{Binding LoadServerFileCommand}" Icon="{ui:SymbolIcon DocumentArrowUp20}" Margin="0,0,8,0"
+                       ToolTip="Конфиг AmneziaWG / WireGuard (.conf), выгруженный из AmneziaVPN" />
             <ui:Button Content="Сохранить" Appearance="Primary" Command="{Binding SaveServerCommand}" />
           </StackPanel>
         </StackPanel>

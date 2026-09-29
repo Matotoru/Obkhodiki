@@ -26,6 +26,7 @@
 
 **VPS (страница «VPS»)**
 - Подписка (например, из панели 3x-ui) или ссылка одного сервера: VLESS (TLS, Reality, ws, gRPC, httpupgrade, HTTP/2), VMess, Hysteria2 (в том числе с прыжками по портам), Trojan, Shadowsocks. Можно сохранить несколько подписок и переключаться между ними. Работает через [sing-box](https://github.com/SagerNet/sing-box). XHTTP пока не поддерживается.
+- AmneziaVPN: ключ `vpn://` своего сервера (AmneziaWG, WireGuard или XRay) или конфиг AmneziaWG/WireGuard (`.conf`). AmneziaWG работает через [amnezia-box](https://github.com/amnezia-vpn/amnezia-box), форк sing-box от команды Amnezia; программа скачивает его один раз, когда добавлен такой сервер. Ключи Amnezia Premium/Free не поддерживаются.
 - Подписка обновляется сама по интервалу, который задаёт панель (по умолчанию раз в 12 часов). Показываются трафик и срок действия.
 - Ссылка подписки и серверы хранятся зашифрованными (DPAPI текущего пользователя) в папке, доступной только администраторам.
 - «Всегда напрямую»: программы, сайты, IP и подсети, которые никогда не идут через VPS — в любом режиме.
@@ -103,13 +104,14 @@ Obkhodiki сделан [matotoru](https://github.com/Matotoru) на основе
 | [WinDivert](https://github.com/basil00/WinDivert) | basil00 | LGPL-3.0 / GPL-2.0 | драйвер перехвата пакетов |
 | [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) | Flowseal | MIT | прокси для Telegram |
 | [sing-box](https://github.com/SagerNet/sing-box) | nekohasekai (SagerNet) | GPL-3.0 | туннель к VPS |
+| [amnezia-box](https://github.com/amnezia-vpn/amnezia-box) | Amnezia VPN (форк sing-box) | GPL-3.0 | туннель AmneziaWG |
 | [sing-geosite](https://github.com/SagerNet/sing-geosite), [sing-geoip](https://github.com/SagerNet/sing-geoip) | nekohasekai (SagerNet) | GPL-3.0 | наборы правил маршрутизации |
 | [russia-v2ray-rules-dat](https://github.com/runetfreedom/russia-v2ray-rules-dat) | runetfreedom | GPL-3.0 | список заблокированного в России |
 | [WPF UI](https://github.com/lepoco/wpfui) | Leszek Pomianowski и участники | MIT | оформление окна |
 | [.NET Community Toolkit](https://github.com/CommunityToolkit/dotnet) | .NET Foundation | MIT | MVVM |
 | [.NET](https://github.com/dotnet/runtime) | .NET Foundation | MIT | платформа |
 
-zapret, стратегии Flowseal, tg-ws-proxy, sing-box и наборы правил не входят в архив Obkhodiki: программа скачивает их из официальных релизов авторов и запускает без изменений. Тексты лицензий встроенных библиотек — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+zapret, стратегии Flowseal, tg-ws-proxy, sing-box и наборы правил не входят в архив Obkhodiki: программа скачивает их из официальных релизов авторов и запускает без изменений. amnezia-box у авторов выходит только в исходниках: его без изменений собирает workflow [amnezia-box.yml](.github/workflows/amnezia-box.yml) этого репозитория из зафиксированного коммита, а программа проверяет контрольную сумму сборки. Тексты лицензий встроенных библиотек — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Прочее
 

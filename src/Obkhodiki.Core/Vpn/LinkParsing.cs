@@ -15,8 +15,14 @@ public interface IProxyServer
     /// <summary>Certificate checks are off: the path can impersonate the server.</summary>
     bool Insecure { get; }
 
-    /// <summary>The sing-box outbound for this server.</summary>
+    /// <summary>The sing-box outbound (or endpoint, see <see cref="IsEndpoint"/>) for this server.</summary>
     JsonObject ToOutbound(string tag);
+
+    /// <summary>Goes into "endpoints" rather than "outbounds" (WireGuard-style tunnels).</summary>
+    bool IsEndpoint => false;
+
+    /// <summary>Only amnezia-box (Amnezia's sing-box fork) runs it.</summary>
+    bool NeedsAmnezia => false;
 }
 
 /// <summary>Parses any supported share link.</summary>
@@ -25,6 +31,7 @@ public static class ProxyLinks
     public static IProxyServer Parse(string text)
     {
         var raw = text.Trim();
+        if (AwgServer.LooksLikeConfig(raw)) return AwgServer.ParseConfig(raw);
         var scheme = raw.IndexOf("://", StringComparison.Ordinal) is var i and > 0 ? raw[..i].ToLowerInvariant() : "";
         return scheme switch
         {
@@ -33,7 +40,8 @@ public static class ProxyLinks
             "trojan" => TrojanLink.Parse(raw),
             "ss" => ShadowsocksLink.Parse(raw),
             "vmess" => VmessLink.Parse(raw),
-            _ => throw new FormatException("Поддерживаются ссылки vless://, vmess://, hysteria2://, trojan:// и ss://"),
+            "vpn" => AmneziaKey.Parse(raw),
+            _ => throw new FormatException("Поддерживаются ссылки vless://, vmess://, hysteria2://, trojan://, ss://, ключи Amnezia vpn:// и конфиги AmneziaWG/WireGuard"),
         };
     }
 

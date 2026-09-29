@@ -33,7 +33,7 @@
     <AssemblyName>Obkhodiki</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Obkhodiki.ico</ApplicationIcon>
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
     <!-- Elevated app: DOTNET_STARTUP_HOOKS from the (user-writable) environment must not load code into it. -->
     <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>
