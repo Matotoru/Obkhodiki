@@ -56,6 +56,11 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.9.0", new[]
+        {
+            "VPS можно подключать не только туннелем, но и как прокси: «VPS» → «Способ подключения» → «Прокси». Obkhodiki прописывает себя в системный прокси Windows (127.0.0.1:8780, HTTP и SOCKS5), через VPS идут браузеры и программы, которые его используют; игры и UDP — напрямую. При выключении прежние настройки прокси возвращаются.",
+            "Поддержка AmneziaVPN из версий 0.8 (ключи vpn:// и конфиги AmneziaWG) убрана. Скачанный для неё amnezia-box удаляется сам.",
+        }),
         new Entry("0.7.0", new[]
         {
             "VMess: ссылки vmess:// и серверы VMess в подписках (в том числе JSON-подписках) теперь принимаются.",

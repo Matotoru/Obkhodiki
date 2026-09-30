@@ -68,7 +68,7 @@
                 </TextBlock.Style>
               </TextBlock>
               <Border Margin="10,0,0,0" Padding="8,1" CornerRadius="8" Background="{DynamicResource SystemFillColorSuccessBackgroundBrush}" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock FontSize="11" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Text="туннель работает" />
+                <TextBlock FontSize="11" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Text="{Binding RunningText}" />
               </Border>
             </StackPanel>
             <TextBlock Style="{StaticResource Caption}" Text="{Binding ServerName}" />
@@ -168,6 +168,28 @@
           </StackPanel>
         </ui:CardControl.Header>
         <ui:ToggleSwitch IsChecked="{Binding VpnEnabled}" OffContent="Выкл" OnContent="Вкл" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+      </ui:CardControl>
+
+      <!-- Connection: virtual adapter or Windows system proxy. -->
+      <ui:CardControl Margin="{StaticResource CardSpacing}" Visibility="{Binding HasServer, Converter={StaticResource BoolToVisibility}}"
+                      IsEnabled="{Binding VpnEnabled}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="PlugConnected24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Способ подключения" />
+            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap"
+                       Text="Туннель — через VPS может идти любой трафик: программы, игры, UDP. Прокси — без виртуального адаптера: Obkhodiki прописывает себя в системный прокси Windows, через VPS идут браузеры и программы, которые его используют; игры и UDP идут напрямую. При выключении прежний прокси возвращается." />
+            <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0" Visibility="{Binding ProxyAddress, Converter={StaticResource NullToVisibility}}">
+              <Run Text="Прокси работает: " /><Run Text="{Binding ProxyAddress, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" (HTTP и SOCKS5) — можно указать и в программе вручную." />
+            </TextBlock>
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ComboBox MinWidth="140" SelectedIndex="{Binding ConnectionMode}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+          <ComboBoxItem Content="Туннель" />
+          <ComboBoxItem Content="Прокси" />
+        </ComboBox>
       </ui:CardControl>
 
       <!-- Mode switch. -->

@@ -62,6 +62,9 @@ public sealed class AppSettings
     /// <summary>"Включить VPS": everything goes through the VPS except <see cref="VpnDirectCategories"/> and direct games.</summary>
     public bool VpnFullTunnel { get; set; }
 
+    /// <summary>Connect through the Windows system proxy instead of a virtual adapter (see VpnPlan.ProxyMode).</summary>
+    public bool VpnProxyMode { get; set; }
+
     /// <summary>Rule-set categories sent through the VPS in selective mode (ids from RuleCatalog.Proxy).</summary>
     public List<string> VpnProxyCategories { get; set; } = new();
 

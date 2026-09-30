@@ -109,6 +109,7 @@ public sealed class PortableSettings
     public List<string> VpnBypassEntries { get; set; } = new();
     public bool VpnEnabled { get; set; } = true;
     public bool VpnFullTunnel { get; set; }
+    public bool VpnProxyMode { get; set; }
     public List<string> VpnProxyCategories { get; set; } = new();
     public List<string> VpnDirectCategories { get; set; } = new() { "ru" };
     public bool VpnAutoBest { get; set; } = true;
@@ -131,6 +132,7 @@ public sealed class PortableSettings
         VpnBypassEntries = s.VpnBypassEntries.ToList(),
         VpnEnabled = s.VpnEnabled,
         VpnFullTunnel = s.VpnFullTunnel,
+        VpnProxyMode = s.VpnProxyMode,
         VpnProxyCategories = s.VpnProxyCategories.ToList(),
         VpnDirectCategories = s.VpnDirectCategories.ToList(),
         VpnAutoBest = s.VpnAutoBest,
@@ -155,6 +157,7 @@ public sealed class PortableSettings
         target.VpnBypassEntries = VpnBypassEntries ?? new();
         target.VpnEnabled = VpnEnabled;
         target.VpnFullTunnel = VpnFullTunnel;
+        target.VpnProxyMode = VpnProxyMode;
         target.VpnProxyCategories = VpnProxyCategories ?? new();
         target.VpnDirectCategories = VpnDirectCategories ?? new();
         target.VpnAutoBest = VpnAutoBest;

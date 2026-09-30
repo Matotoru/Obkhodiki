@@ -43,7 +43,7 @@ internal sealed partial class AppController
         if (Settings.GameProfiles.Count == 0) Line("нет");
         Line();
         Line("== VPS ==");
-        Line($"sing-box: {SingBoxVersion ?? "не установлен"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning}; весь трафик: {Settings.VpnFullTunnel}");
+        Line($"sing-box: {SingBoxVersion ?? "не установлен"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning}; весь трафик: {Settings.VpnFullTunnel}; режим: {(Settings.VpnProxyMode ? "прокси" : "туннель")}{(SystemProxyAddress is { } proxy ? $" ({proxy})" : "")}");
         Line($"Источник: {VpnServerName ?? "не задан"}");
         foreach (var s in VpnServers)
         {
@@ -192,7 +192,7 @@ internal sealed partial class AppController
             var env = Environment.GetEnvironmentVariable("HTTPS_PROXY") ?? Environment.GetEnvironmentVariable("HTTP_PROXY") ?? Environment.GetEnvironmentVariable("ALL_PROXY");
             return $"{(enabled ? "включён" : "выключен")}{(server is { Length: > 0 } ? $" ({server})" : "")}" +
                    (pac is { Length: > 0 } ? $", PAC {pac}" : "") + (env is not null ? $", переменная окружения {env}" : "") +
-                   " — Obkhodiki его не использует";
+                   " — сама программа через него не ходит (в режиме «Прокси» она ставит его на свой sing-box и возвращает прежний при выключении)";
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException)
         {

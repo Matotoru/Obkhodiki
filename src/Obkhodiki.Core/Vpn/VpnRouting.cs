@@ -19,6 +19,12 @@ public sealed record VpnPlan(
     public IReadOnlyList<string> BypassProcesses { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> BypassEntries { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Connect as a system proxy instead of a virtual adapter: only apps that honour the Windows proxy setting
+    /// (browsers, most desktop apps) go through it; games and other UDP traffic stay direct.
+    /// </summary>
+    public bool ProxyMode { get; init; }
+
     /// <summary>The app's own traffic (downloads, direct-path measurements) never rides the tunnel.</summary>
     public const string SelfProcess = "Obkhodiki.exe";
 
@@ -27,6 +33,7 @@ public sealed record VpnPlan(
     {
     }
 
+    /// <summary>Something has to go through the VPS (with a tunnel, or through the proxy in proxy mode).</summary>
     public bool NeedsTunnel => FullTunnel || Processes.Count > 0 || Domains.Count > 0 || ProxyCategories.Count > 0;
 
     /// <summary>Rule-set categories the active mode uses.</summary>
@@ -78,6 +85,7 @@ public sealed record VpnPlan(
             RuleCatalog.Sanitize(settings.VpnDirectCategories, RuleCatalog.Direct))
         {
             BypassProcesses = bypass,
+            ProxyMode = settings.VpnProxyMode,
             BypassEntries = settings.VpnBypassEntries.Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList(),
         };
     }

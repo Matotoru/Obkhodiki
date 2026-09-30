@@ -83,6 +83,16 @@ public sealed partial class VpnViewModel : ObservableObject
 
     [ObservableProperty] private bool _vpnEnabled = true;
     [ObservableProperty] private bool _fullTunnel;
+
+    /// <summary>0 — tunnel (virtual adapter), 1 — Windows system proxy.</summary>
+    [ObservableProperty] private int _connectionMode;
+
+    /// <summary>"127.0.0.1:8780" while proxy mode runs.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RunningText))]
+    private string? _proxyAddress;
+
+    public string RunningText => ProxyAddress is null ? "туннель работает" : "прокси работает";
     [ObservableProperty] private bool _autoBest = true;
     [ObservableProperty] private bool _isSubscription;
     [ObservableProperty] private string? _sourceDetails;
@@ -161,6 +171,21 @@ public sealed partial class VpnViewModel : ObservableObject
     {
         if (_syncing) return;
         _ = _shell.RunAsync(c => c.SetVpnFullTunnelAsync(value));
+    }
+
+    /// <summary>UI preview only: proxy mode as it looks while running.</summary>
+    internal void PreviewProxyMode()
+    {
+        _syncing = true;
+        ConnectionMode = 1;
+        _syncing = false;
+        ProxyAddress = "127.0.0.1:8780";
+    }
+
+    partial void OnConnectionModeChanged(int value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetVpnProxyModeAsync(value == 1));
     }
 
     partial void OnAutoBestChanged(bool value)
@@ -267,6 +292,7 @@ public sealed partial class VpnViewModel : ObservableObject
         IsRunning = c.IsVpnRunning;
         IsBusy = c.BusyText is not null;
         SingBoxVersion = c.SingBoxVersion ?? "не установлен";
+        ProxyAddress = c.SystemProxyAddress;
         SyncSource(c);
         _syncing = true;
         // While an operation runs the switch shows what the user asked for; the result arrives with the next refresh.
@@ -274,6 +300,7 @@ public sealed partial class VpnViewModel : ObservableObject
         {
             VpnEnabled = c.Settings.VpnEnabled;
             FullTunnel = c.Settings.VpnFullTunnel;
+            ConnectionMode = c.Settings.VpnProxyMode ? 1 : 0;
             AutoBest = c.Settings.VpnAutoBest;
         }
         _syncing = false;

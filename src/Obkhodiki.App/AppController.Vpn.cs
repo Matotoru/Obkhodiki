@@ -65,7 +65,14 @@ internal sealed partial class AppController
         IReadOnlyList<LocalRuleSet> ProxySets,
         IReadOnlyList<LocalRuleSet> DirectSets,
         IReadOnlyList<string> LocalDns,
-        bool HostIpv6);
+        bool HostIpv6,
+        int? ProxyPort = null);
+
+    /// <summary>Port of the local proxy in proxy mode; kept across restarts so the system proxy stays valid.</summary>
+    public const int PreferredProxyPort = 8780;
+
+    /// <summary>The address the system proxy points at while proxy mode runs; null otherwise.</summary>
+    public string? SystemProxyAddress => IsVpnRunning && _appliedLaunch?.ProxyPort is { } port ? SystemProxy.Address(port) : null;
 
     // Servers sing-box refused to load (checked before each start); left out for the rest of the session.
     private readonly HashSet<string> _rejectedServers = new();
@@ -110,6 +117,8 @@ internal sealed partial class AppController
     {
         _uiContext = SynchronizationContext.Current;
         RemoveAmneziaLeftovers();
+        // Left over from a crash of the app while proxy mode ran: without this, browsers would point at a dead port.
+        RestoreSystemProxy();
         ReloadSource();
         _gameWatch = new System.Windows.Forms.Timer { Interval = (int)GameWatchInterval.TotalMilliseconds };
         _gameWatch.Tick += async (_, _) => await WatchGamesAsync();
@@ -199,6 +208,7 @@ internal sealed partial class AppController
     public Task RemoveVpnServerAsync() => Serialized("Отключение VPS…", silentErrors: false, async () =>
     {
         await Task.Run(SingBox.Stop);
+        RestoreSystemProxy();
         _clash = null;
         VpnSourceStore.Remove();
         UseSource(null);
@@ -267,6 +277,25 @@ internal sealed partial class AppController
         }
     });
 
+    /// <summary>Tunnel (virtual adapter, all programs and games) or proxy (Windows system proxy, browsers and apps).</summary>
+    public Task SetVpnProxyModeAsync(bool proxy) => Serialized(proxy ? "Переход в режим прокси…" : "Переход в режим туннеля…", silentErrors: false, async () =>
+    {
+        var was = Settings.VpnProxyMode;
+        Settings.VpnProxyMode = proxy;
+        _settingsStore.Save(Settings);
+        try
+        {
+            await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+        }
+        catch
+        {
+            Settings.VpnProxyMode = was;
+            _settingsStore.Save(Settings);
+            throw;
+        }
+        Log.Info(proxy ? "VPS connection mode: system proxy" : "VPS connection mode: tunnel");
+    });
+
     /// <summary>Master switch: off stops sing-box completely and keeps every VPS setting.</summary>
     public Task SetVpnEnabledAsync(bool on) => Serialized(on ? "Включение VPS…" : "Выключение VPS…", silentErrors: false, async () =>
     {
@@ -333,6 +362,7 @@ internal sealed partial class AppController
         if (_source is null || _servers.Count == 0 || !Settings.VpnEnabled || (!plan.NeedsTunnel && !needProbe))
         {
             if (IsVpnRunning) await Task.Run(SingBox.Stop);
+            RestoreSystemProxy();
             _autoPingCts?.Cancel();
             _clash = null;
             _appliedSignature = null;
@@ -350,19 +380,35 @@ internal sealed partial class AppController
         }
 
         var (proxySets, directSets, stamps) = await PrepareRuleSetsAsync(plan, refreshRules);
-        var tun = plan.NeedsTunnel;
+        // Proxy mode: no virtual adapter; the same rules apply to what apps send to the system proxy.
+        var proxyMode = plan.NeedsTunnel && plan.ProxyMode;
+        var tun = plan.NeedsTunnel && !proxyMode;
         var hostIpv6 = HostHasIpv6();
-        var signature = $"{_source.Signature()}|{tun}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
+        var signature = $"{_source.Signature()}|{tun}|proxy={proxyMode}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
                         $"{string.Join(",", plan.DirectProcesses)}|{string.Join(",", plan.BypassProcesses)}|{string.Join(",", plan.BypassEntries)}|" +
                         $"{stamps}|v6={hostIpv6}";
-        if (IsVpnRunning && signature == _appliedSignature) return;
+        if (IsVpnRunning && signature == _appliedSignature)
+        {
+            SyncSystemProxy();
+            return;
+        }
 
         var localDns = new[] { "raw.githubusercontent.com", _source.SubscriptionHost }.Where(h => h is not null).Select(h => h!).ToList();
-        var launch = await DropRejectedServersAsync(new SingBoxLaunch(_servers, ActiveServerTag, tun, plan, proxySets, directSets, localDns, hostIpv6));
-        await Task.Run(() => StartSingBoxAsync(launch));
+        var launch = await DropRejectedServersAsync(new SingBoxLaunch(_servers, ActiveServerTag, tun, plan, proxySets, directSets, localDns, hostIpv6,
+            proxyMode ? ProxyPortFor() : null));
+        try
+        {
+            await Task.Run(() => StartSingBoxAsync(launch));
+        }
+        catch
+        {
+            RestoreSystemProxy();
+            throw;
+        }
         _appliedSignature = signature;
         _appliedLaunch = launch;
-        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {_source.Describe()}, tunnel {tun}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
+        SyncSystemProxy();
+        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {_source.Describe()}, tunnel {tun}, proxy {launch.ProxyPort?.ToString() ?? "off"}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
                  $"processes [{string.Join(", ", plan.Processes)}], domains {plan.Domains.Count}, rule-sets [{string.Join(", ", proxySets.Concat(directSets).Select(r => r.Tag))}]");
         Changed();
     }
@@ -522,6 +568,7 @@ internal sealed partial class AppController
             ClashApi = api,
             LocalDnsDomains = launch.LocalDns,
             HostIpv6 = launch.HostIpv6,
+            SystemProxyPort = launch.ProxyPort,
         };
         return SingBoxConfig.Build(launch.Servers, launch.ActiveTag, options);
     }
@@ -591,6 +638,8 @@ internal sealed partial class AppController
 
     private void OnSingBoxCrashed(string runnerOutput)
     {
+        // Browsers must not hang on a dead port while sing-box restarts (or if it gives up).
+        RestoreSystemProxy();
         _appliedSignature = null;
         _autoPingCts?.Cancel();
         _clash = null;
@@ -671,6 +720,50 @@ internal sealed partial class AppController
         if (a.IsIPv6LinkLocal || a.IsIPv6SiteLocal || a.IsIPv6Teredo || a.IsIPv6Multicast || IPAddress.IsLoopback(a)) return false;
         var first = a.GetAddressBytes()[0];
         return (first & 0xFE) != 0xFC; // fc00::/7 unique-local addresses are not the internet
+    }
+
+    /// <summary>The same port as before when there was one, else the preferred one when free, else any free port.</summary>
+    private int ProxyPortFor()
+    {
+        if (_appliedLaunch?.ProxyPort is { } previous) return previous;
+        try
+        {
+            var probe = new TcpListener(IPAddress.Loopback, PreferredProxyPort);
+            probe.Start();
+            probe.Stop();
+            return PreferredProxyPort;
+        }
+        catch (SocketException)
+        {
+            return FreeLocalPort();
+        }
+    }
+
+    /// <summary>Points the system proxy at sing-box while proxy mode runs; restores the user's setting otherwise.</summary>
+    private void SyncSystemProxy()
+    {
+        try
+        {
+            if (SystemProxyAddress is not null && _appliedLaunch?.ProxyPort is { } port) SystemProxy.Apply(port);
+            else SystemProxy.Restore();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            Log.Error("System proxy update failed", ex);
+            Notify?.Invoke("Прокси", "Не удалось изменить системный прокси Windows: " + ex.Message, ToolTipIcon.Warning);
+        }
+    }
+
+    private static void RestoreSystemProxy()
+    {
+        try
+        {
+            SystemProxy.Restore();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            Log.Error("System proxy restore failed", ex);
+        }
     }
 
     private static int FreeLocalPort()
@@ -1038,6 +1131,7 @@ internal sealed partial class AppController
 
     private void DisposeVpn()
     {
+        RestoreSystemProxy();
         _gameWatch?.Dispose();
         _localHttp.Dispose();
         _singBoxInstance?.Dispose();

@@ -36,6 +36,12 @@ public sealed record SingBoxOptions(
     public ClashApiOptions? ClashApi { get; init; }
 
     /// <summary>
+    /// "Proxy" mode: a local HTTP/SOCKS5 proxy on this port (no password: the Windows system proxy cannot send one)
+    /// that apps reach through the system proxy setting. Its traffic follows the same rules as the tunnel's.
+    /// </summary>
+    public int? SystemProxyPort { get; init; }
+
+    /// <summary>
     /// Always resolved locally, even in full-tunnel mode: hosts the app itself downloads from (subscription,
     /// rule-sets). If the active server dies, the app must still be able to fetch a fresh server list.
     /// </summary>
@@ -170,6 +176,17 @@ public static partial class SingBoxConfig
                 // On Windows "strict" adds firewall rules against DNS queries bypassing the adapter: needed whenever
                 // lookups go through the VPS, or Windows' parallel lookup to the ISP (possibly poisoned) would win.
                 ["strict_route"] = remoteDns,
+            });
+        }
+        if (options.SystemProxyPort is { } proxyPort)
+        {
+            if (proxyPort is < 1024 or > 65535 || proxyPort == options.ProbePort) throw new ArgumentException("Invalid system proxy port.");
+            inbounds.Add(new JsonObject
+            {
+                ["type"] = "mixed",
+                ["tag"] = "proxy-in",
+                ["listen"] = "127.0.0.1",
+                ["listen_port"] = proxyPort,
             });
         }
         inbounds.Add(new JsonObject
