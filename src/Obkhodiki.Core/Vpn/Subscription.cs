@@ -10,9 +10,8 @@ public sealed record VpnServerEntry(string Tag, IProxyServer Server)
     /// <summary>From the link without its "#name": panels rewrite names (remaining traffic, days) on every fetch.</summary>
     public static string TagFor(string rawLink)
     {
-        var link = rawLink.Trim().ReplaceLineEndings("\n");
-        // A WireGuard config is not a link: its "#" lines are comments, and the whole text is the identity.
-        var hash = AwgServer.LooksLikeConfig(link) ? -1 : link.IndexOf('#');
+        var link = rawLink.Trim();
+        var hash = link.IndexOf('#');
         if (hash >= 0) link = link[..hash];
         return "s-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(link)))[..10].ToLowerInvariant();
     }

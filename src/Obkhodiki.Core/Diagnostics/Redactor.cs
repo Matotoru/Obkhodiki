@@ -21,16 +21,15 @@ public static partial class Redactor
     [GeneratedRegex(@"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", RegexOptions.IgnoreCase)]
     private static partial Regex Uuid();
 
-    // Also WireGuard/AmneziaWG configs ("PrivateKey = …", "PresharedKey = …") and their JSON in Amnezia keys.
-    [GeneratedRegex(@"(?i)\b(password|passwd|secret|token|auth|obfs-password|pbk|sid|key|private_?key|pre_?shared_?key|client_priv_key|psk_key|api_key)(\s*[=:]\s*|""\s*:\s*"")([^\s,;&""']+)")]
+    [GeneratedRegex(@"(?i)\b(password|passwd|secret|token|auth|obfs-password|pbk|sid|key)(\s*[=:]\s*|""\s*:\s*"")([^\s,;&""']+)")]
     private static partial Regex KeyValue();
 
     [GeneratedRegex(@"(?i)(Bearer\s+)[A-Za-z0-9._\-]+")]
     private static partial Regex Bearer();
 
     // Legacy Shadowsocks links ss://BASE64(method:password@host:port) and vmess://BASE64(JSON with the UUID):
-    // everything, the secret included, is encoded. AmneziaVPN's vpn:// keys likewise (compressed JSON).
-    [GeneratedRegex(@"(?i)\b(ss|vmess|vpn)://[A-Za-z0-9+/_=\-]{8,}(?=[\s#""'<>]|$)")]
+    // everything, the secret included, is encoded.
+    [GeneratedRegex(@"(?i)\b(ss|vmess)://[A-Za-z0-9+/_=\-]{8,}(?=[\s#""'<>]|$)")]
     private static partial Regex LegacySs();
 
     // C:\Users\<name>\… (also with forward slashes; names may contain spaces when a path follows) → %USERPROFILE%\…

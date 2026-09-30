@@ -29,8 +29,6 @@ internal sealed partial class AppController
 
     private readonly SingBoxStore _sbStore = new(AppPaths.SingBoxRoot);
     private SingBoxUpdater? _sbUpdaterInstance;
-    // AmneziaWG servers run on amnezia-box instead of sing-box (same config format, one extra endpoint type).
-    private readonly Obkhodiki.Core.Updates.VersionedFileStore _abStore = AmneziaBoxUpdater.CreateStore(AppPaths.AmneziaBoxRoot);
     private WinwsRunner? _singBoxInstance;
     private volatile ReleaseInfo? _availableSbUpdate;
     private bool _confirmingSbUpdate;
@@ -82,7 +80,7 @@ internal sealed partial class AppController
         {
             if (_singBoxInstance is not null) return _singBoxInstance;
             _singBoxInstance = new WinwsRunner(
-                () => CoreExe ?? throw new InvalidOperationException($"{CoreName} не установлен."),
+                () => _sbStore.ActiveMain ?? throw new InvalidOperationException("sing-box не установлен."),
                 startupCheck: TimeSpan.FromSeconds(2));
             _singBoxInstance.Crashed += OnSingBoxCrashed;
             return _singBoxInstance;
@@ -106,48 +104,30 @@ internal sealed partial class AppController
     public bool IsVpnRunning => _singBoxInstance?.IsRunning == true;
     public ReleaseInfo? AvailableSbUpdate => _availableSbUpdate;
     public string? SingBoxVersion => _sbStore.ActiveVersion;
-    public string? AmneziaBoxVersion => _abStore.ActiveVersion;
-
-    /// <summary>The current servers need amnezia-box (some are AmneziaWG/WireGuard).</summary>
-    private bool UsesAmnezia => SingBoxConfig.NeedsAmnezia(_servers);
-
-    /// <summary>The program that runs the tunnel for the current servers; null when it is not installed.</summary>
-    private string? CoreExe => UsesAmnezia ? _abStore.ActiveMain : _sbStore.ActiveMain;
-
-    private string CoreName => UsesAmnezia ? "amnezia-box" : SingBoxProductName;
-
-    /// <summary>The needed program is missing, or amnezia-box is older than the build this app version pins.</summary>
-    private bool CoreNeedsInstall => UsesAmnezia ? ReleaseVersion.IsNewer(AmneziaBox.Version, _abStore.ActiveVersion) : _sbStore.ActiveMain is null;
-
-    private Task<bool> InstallCoreAsync() => UsesAmnezia ? InstallAmneziaBoxAsync() : InstallFirstSingBoxAsync();
-
-    private async Task<bool> InstallAmneziaBoxAsync()
-    {
-        var updater = new AmneziaBoxUpdater(new AmneziaBoxReleaseClient(_http, RuntimeInformation.OSArchitecture), _abStore);
-        var release = AmneziaBox.Release(RuntimeInformation.OSArchitecture);
-        if (!ConfirmUpdate("amnezia-box (AmneziaWG)", release.Version, _abStore.ActiveVersion)) return _abStore.ActiveMain is not null;
-        SetBusy($"Загрузка amnezia-box {release.Version}…");
-        try
-        {
-            await Task.Run(() => updater.InstallAsync(release, TestStartSingBoxAsync, null, CancellationToken.None));
-        }
-        catch (UpdateException ex)
-        {
-            Log.Error("amnezia-box install failed", ex);
-            throw new InvalidOperationException("Не удалось установить amnezia-box: " + ex.Message, ex);
-        }
-        Log.Info($"Installed amnezia-box {release.Version}");
-        return true;
-    }
 
     /// <summary>Called on the UI thread; the game watch runs there too, so it reads settings safely.</summary>
     private void InitializeVpn()
     {
         _uiContext = SynchronizationContext.Current;
+        RemoveAmneziaLeftovers();
         ReloadSource();
         _gameWatch = new System.Windows.Forms.Timer { Interval = (int)GameWatchInterval.TotalMilliseconds };
         _gameWatch.Tick += async (_, _) => await WatchGamesAsync();
         _gameWatch.Start();
+    }
+
+    /// <summary>0.8.x downloaded amnezia-box for AmneziaWG; that support was withdrawn in 0.9.0.</summary>
+    private static void RemoveAmneziaLeftovers()
+    {
+        var dir = Path.Combine(AppPaths.VpnRoot, "amnezia-box");
+        try
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Info($"Could not remove {dir}: {ex.Message}");
+        }
     }
 
     private void ReloadSource()
@@ -205,9 +185,9 @@ internal sealed partial class AppController
         {
             Activate(source);
             // Adding a server is the moment to fetch sing-box (with confirmation), not later in the background.
-            if (CoreNeedsInstall && !await InstallCoreAsync())
+            if (_sbStore.ActiveMain is null && !await InstallFirstSingBoxAsync())
             {
-                error = $"Сервер сохранён, но {CoreName} не установлен: без него VPS работать не будет.";
+                error = "Сервер сохранён, но sing-box не установлен: без него VPS работать не будет.";
                 return;
             }
             await ApplyVpnCoreAsync(interactive: true, needProbe: false);
@@ -360,12 +340,11 @@ internal sealed partial class AppController
             return;
         }
 
-        if (CoreNeedsInstall)
+        if (_sbStore.ActiveMain is null)
         {
-            // A stale amnezia-box still runs; only a missing program stops the start.
-            if ((!interactive || !await InstallCoreAsync()) && CoreExe is null)
+            if (!interactive || !await InstallFirstSingBoxAsync())
             {
-                Notify?.Invoke("VPS", $"{CoreName} не установлен: откройте «VPS» и сохраните ссылку ещё раз.", ToolTipIcon.Warning);
+                Notify?.Invoke("VPS", "sing-box не установлен: откройте «VPS» и сохраните ссылку ещё раз.", ToolTipIcon.Warning);
                 return;
             }
         }
@@ -383,7 +362,7 @@ internal sealed partial class AppController
         await Task.Run(() => StartSingBoxAsync(launch));
         _appliedSignature = signature;
         _appliedLaunch = launch;
-        Log.Info($"{CoreName} {(UsesAmnezia ? _abStore.ActiveVersion : _sbStore.ActiveVersion)} started: {_source.Describe()}, tunnel {tun}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
+        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {_source.Describe()}, tunnel {tun}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
                  $"processes [{string.Join(", ", plan.Processes)}], domains {plan.Domains.Count}, rule-sets [{string.Join(", ", proxySets.Concat(directSets).Select(r => r.Tag))}]");
         Changed();
     }
@@ -452,7 +431,7 @@ internal sealed partial class AppController
     /// <summary>Asks the installed sing-box to read the file; a newer format or a corrupt file is refused.</summary>
     private async Task ValidateRuleSetAsync(string path)
     {
-        if (CoreExe is not { } exe) return;
+        if (_sbStore.ActiveMain is not { } exe) return;
         var output = path + ".json";
         try
         {
@@ -486,7 +465,7 @@ internal sealed partial class AppController
         return (p.ExitCode, await stdout + await stderr);
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"initialize (outbound|endpoint)\[(\d+)\]")]
+    [System.Text.RegularExpressions.GeneratedRegex(@"initialize outbound\[(\d+)\]")]
     private static partial System.Text.RegularExpressions.Regex RejectedOutbound();
 
     /// <summary>
@@ -495,7 +474,7 @@ internal sealed partial class AppController
     /// </summary>
     private async Task<SingBoxLaunch> DropRejectedServersAsync(SingBoxLaunch launch)
     {
-        if (CoreExe is not { } exe) return launch;
+        if (_sbStore.ActiveMain is not { } exe) return launch;
         var path = Path.Combine(AppPaths.VpnRoot, "check.json");
         try
         {
@@ -505,12 +484,12 @@ internal sealed partial class AppController
                 await File.WriteAllTextAsync(path, json);
                 var (code, output) = await RunSingBoxToolAsync(exe, "check", "-c", path, "--disable-color");
                 if (code == 0) return launch;
-                if (RejectedOutbound().Match(output) is not { Success: true } m ||
-                    SingBoxConfig.ServerAt(launch.Servers, m.Groups[1].Value == "endpoint", int.Parse(m.Groups[2].Value)) is not { } bad)
+                if (RejectedOutbound().Match(output) is not { Success: true } m || int.Parse(m.Groups[1].Value) is var i && i >= launch.Servers.Count)
                 {
                     // Not a single server's fault: report it as is (the output holds no secrets, only field errors).
                     throw new InvalidOperationException("sing-box отклонил настройки: " + LastLine(output));
                 }
+                var bad = launch.Servers[i];
                 _rejectedServers.Add(bad.Tag);
                 Log.Error($"sing-box rejected server {bad.Server}: {LastLine(output)}", null);
                 Notify?.Invoke("Сервер пропущен", $"{bad.Server.Name ?? bad.Server.Host}: sing-box не принимает его настройки.", ToolTipIcon.Warning);
@@ -866,7 +845,7 @@ internal sealed partial class AppController
         lock (_autoGate) wasVpn = _autoVpn.Contains(exe);
 
         var endpoints = profile.ProbeEndpoints.Where(IsMeasurable).Select(IPEndPoint.Parse).ToList();
-        if (endpoints.Count == 0 || _servers.Count == 0 || CoreExe is null || !Settings.VpnEnabled)
+        if (endpoints.Count == 0 || _servers.Count == 0 || _sbStore.ActiveMain is null || !Settings.VpnEnabled)
         {
             Notify?.Invoke(profile.Name, endpoints.Count == 0
                 ? "Авто не смог выбрать и оставил «Напрямую»: нет адресов для замера. Выполните «Дообучить» во время матча или выберите маршрут вручную."

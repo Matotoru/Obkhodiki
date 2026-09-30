@@ -31,7 +31,6 @@ internal static class AppPaths
     /// Locked to Administrators/SYSTEM only (see SecureStorage) — unlike the rest of Root, not readable by users.</summary>
     public static readonly string VpnRoot = Path.Combine(Root, "vpn");
     public static readonly string SingBoxRoot = Path.Combine(VpnRoot, "engine");
-    public static readonly string AmneziaBoxRoot = Path.Combine(VpnRoot, "amnezia-box");
     public static readonly string VpnConfig = Path.Combine(VpnRoot, "config.json");
     public static readonly string VpnServerFile = Path.Combine(VpnRoot, "server.bin");
     public static readonly string VpnSavedFile = Path.Combine(VpnRoot, "saved.bin");

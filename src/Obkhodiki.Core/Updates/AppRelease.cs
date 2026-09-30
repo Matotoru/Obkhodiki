@@ -23,7 +23,6 @@ public static class AppInfo
         new Credit("WinDivert", "basil00", "LGPL-3.0 / GPL-2.0", "драйвер перехвата пакетов", "https://github.com/basil00/WinDivert"),
         new Credit("tg-ws-proxy", "Flowseal", "MIT", "прокси для Telegram", "https://github.com/Flowseal/tg-ws-proxy"),
         new Credit("sing-box", "nekohasekai (SagerNet)", "GPL-3.0", "туннель к VPS", "https://github.com/SagerNet/sing-box"),
-        new Credit("amnezia-box", "Amnezia VPN (форк sing-box)", "GPL-3.0", "туннель AmneziaWG", "https://github.com/amnezia-vpn/amnezia-box"),
         new Credit("sing-geosite / sing-geoip", "nekohasekai (SagerNet)", "GPL-3.0", "наборы правил маршрутизации", "https://github.com/SagerNet/sing-geosite"),
         new Credit("russia-v2ray-rules-dat", "runetfreedom", "GPL-3.0", "список заблокированного в России", "https://github.com/runetfreedom/russia-v2ray-rules-dat"),
         new Credit("WPF UI", "Leszek Pomianowski и участники", "MIT", "оформление окна", "https://github.com/lepoco/wpfui"),
@@ -57,15 +56,6 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
-        new Entry("0.8.1", new[]
-        {
-            "Конфиги AmneziaWG/WireGuard с необычным PersistentKeepalive (например, off) больше не отклоняются.",
-        }),
-        new Entry("0.8.0", new[]
-        {
-            "AmneziaVPN: на странице VPS принимаются ключи vpn:// и конфиги AmneziaWG/WireGuard (.conf, кнопка «Из файла»). Для AmneziaWG программа один раз скачивает amnezia-box — версию sing-box от команды Amnezia.",
-            "Из ключа Amnezia берётся протокол, выбранный на сервере: AmneziaWG, WireGuard или XRay. OpenVPN, Cloak и IKEv2 не поддерживаются, ключи Amnezia Premium/Free — тоже.",
-        }),
         new Entry("0.7.0", new[]
         {
             "VMess: ссылки vmess:// и серверы VMess в подписках (в том числе JSON-подписках) теперь принимаются.",

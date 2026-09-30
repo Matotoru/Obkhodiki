@@ -117,16 +117,6 @@ public static partial class SingBoxConfig
 
     public static bool IsCidr(string entry) => entry.Contains('/');
 
-    /// <summary>Some server needs amnezia-box instead of the official sing-box.</summary>
-    public static bool NeedsAmnezia(IEnumerable<VpnServerEntry> servers) => servers.Any(s => s.Server.NeedsAmnezia);
-
-    /// <summary>
-    /// The server behind "initialize outbound[i]" / "initialize endpoint[i]" in a sing-box check error: outbounds
-    /// and endpoints are numbered separately, each in the order of <paramref name="servers"/>.
-    /// </summary>
-    public static VpnServerEntry? ServerAt(IReadOnlyList<VpnServerEntry> servers, bool endpoint, int index) =>
-        servers.Where(s => s.Server.IsEndpoint == endpoint).ElementAtOrDefault(index);
-
     /// <summary>Single-server convenience (tests, older callers).</summary>
     public static string Build(IProxyServer server, SingBoxOptions options) =>
         Build(new[] { new VpnServerEntry("server", server) }, "server", options);
@@ -196,9 +186,7 @@ public static partial class SingBoxConfig
         });
 
         var outbounds = new JsonArray();
-        var endpoints = new JsonArray();
-        // WireGuard-style servers are endpoints; the selector and rules address them by tag like outbounds.
-        foreach (var s in servers) (s.Server.IsEndpoint ? endpoints : outbounds).Add(s.Server.ToOutbound(s.Tag));
+        foreach (var s in servers) outbounds.Add(s.Server.ToOutbound(s.Tag));
         var active = servers.Any(s => s.Tag == activeTag) ? activeTag! : servers[0].Tag;
         outbounds.Add(new JsonObject
         {
@@ -212,9 +200,6 @@ public static partial class SingBoxConfig
         outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = "direct" });
 
         var rules = new JsonArray();
-        // amnezia-box's AmneziaWG endpoint cannot dial a name (its tunnel has no resolver), so names asked for on
-        // the probe port (downloads through the VPS) are resolved first. Tunnel traffic already arrives as addresses.
-        if (NeedsAmnezia(servers)) rules.Add(new JsonObject { ["inbound"] = new JsonArray("probe-in"), ["action"] = "resolve" });
         foreach (var s in servers)
         {
             rules.Add(new JsonObject { ["inbound"] = new JsonArray("probe-in"), ["auth_user"] = new JsonArray(ServerProbeUser(s.Tag)), ["outbound"] = s.Tag });
@@ -269,7 +254,6 @@ public static partial class SingBoxConfig
             ["outbounds"] = outbounds,
             ["route"] = route,
         };
-        if (endpoints.Count > 0) root["endpoints"] = endpoints;
         if (options.ClashApi is { } api)
         {
             if (api.Port is < 1024 or > 65535 || api.Secret.Length < 16) throw new ArgumentException("Invalid Clash API options.");
