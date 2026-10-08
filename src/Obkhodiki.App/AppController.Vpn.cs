@@ -66,7 +66,14 @@ internal sealed partial class AppController
         IReadOnlyList<LocalRuleSet> DirectSets,
         IReadOnlyList<string> LocalDns,
         bool HostIpv6,
-        int? ProxyPort = null);
+        int? ProxyPort = null)
+    {
+        public IReadOnlyList<LocalRuleSet> WarpSets { get; init; } = Array.Empty<LocalRuleSet>();
+        public int? WarpPort { get; init; }
+    }
+
+    // WARP was switched to proxy mode by this app and is connected.
+    private bool _warpActive;
 
     /// <summary>Port of the local proxy in proxy mode; kept across restarts so the system proxy stays valid.</summary>
     public const int PreferredProxyPort = 8780;
@@ -363,6 +370,7 @@ internal sealed partial class AppController
         {
             if (IsVpnRunning) await Task.Run(SingBox.Stop);
             RestoreSystemProxy();
+            await ReleaseWarpAsync();
             _autoPingCts?.Cancel();
             _clash = null;
             _appliedSignature = null;
@@ -379,23 +387,53 @@ internal sealed partial class AppController
             }
         }
 
-        var (proxySets, directSets, stamps) = await PrepareRuleSetsAsync(plan, refreshRules);
+        var (proxySets, directSets, warpSets, stamps) = await PrepareRuleSetsAsync(plan, refreshRules);
         // Proxy mode: no virtual adapter; the same rules apply to what apps send to the system proxy.
         var proxyMode = plan.NeedsTunnel && plan.ProxyMode;
         var tun = plan.NeedsTunnel && !proxyMode;
         var hostIpv6 = HostHasIpv6();
         var signature = $"{_source.Signature()}|{tun}|proxy={proxyMode}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
                         $"{string.Join(",", plan.DirectProcesses)}|{string.Join(",", plan.BypassProcesses)}|{string.Join(",", plan.BypassEntries)}|" +
-                        $"{stamps}|v6={hostIpv6}";
+                        $"{stamps}|v6={hostIpv6}|warp={string.Join(",", plan.WarpDomains)};{string.Join(",", plan.WarpCategories)}|xbox={plan.XboxDns}";
         if (IsVpnRunning && signature == _appliedSignature)
         {
             SyncSystemProxy();
             return;
         }
 
+        // WARP must be up before sing-box starts sending sites to its port.
+        if (plan.UsesWarp)
+        {
+            try
+            {
+                await Task.Run(() => WarpClient.EnsureProxyAsync(WarpClient.DefaultPort, CancellationToken.None));
+                _warpActive = true;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or IOException or System.ComponentModel.Win32Exception)
+            {
+                // The VPS must not go down with WARP: its sites take the usual route until the next apply.
+                Log.Error("Cloudflare WARP is not available", ex);
+                Notify?.Invoke("Cloudflare WARP", ex.Message + " Сайты WARP пока идут обычным путём.", ToolTipIcon.Warning);
+                _warpActive = true; // may have been switched to proxy mode: give it back on the next release
+                await ReleaseWarpAsync();
+                plan = plan with { WarpDomains = Array.Empty<string>(), WarpCategories = Array.Empty<string>() };
+                warpSets = new List<LocalRuleSet>();
+                // The next apply (any settings change, a restart) tries WARP again.
+                signature += "|warp-failed";
+            }
+        }
+        else
+        {
+            await ReleaseWarpAsync();
+        }
+
         var localDns = new[] { "raw.githubusercontent.com", _source.SubscriptionHost }.Where(h => h is not null).Select(h => h!).ToList();
         var launch = await DropRejectedServersAsync(new SingBoxLaunch(_servers, ActiveServerTag, tun, plan, proxySets, directSets, localDns, hostIpv6,
-            proxyMode ? ProxyPortFor() : null));
+            proxyMode ? ProxyPortFor() : null)
+        {
+            WarpSets = warpSets,
+            WarpPort = plan.UsesWarp ? WarpClient.DefaultPort : null,
+        });
         try
         {
             await Task.Run(() => StartSingBoxAsync(launch));
@@ -417,13 +455,14 @@ internal sealed partial class AppController
     /// Makes sure the files of the active categories are on disk (downloading missing ones, and stale ones when
     /// asked). A category whose files cannot be fetched is left out with a warning instead of failing the start.
     /// </summary>
-    private async Task<(List<LocalRuleSet> Proxy, List<LocalRuleSet> Direct, string Stamps)> PrepareRuleSetsAsync(VpnPlan plan, bool refresh)
+    private async Task<(List<LocalRuleSet> Proxy, List<LocalRuleSet> Direct, List<LocalRuleSet> Warp, string Stamps)> PrepareRuleSetsAsync(VpnPlan plan, bool refresh)
     {
         var proxy = new List<LocalRuleSet>();
         var direct = new List<LocalRuleSet>();
+        var warp = new List<LocalRuleSet>();
         var stamps = new StringBuilder();
         var missing = new List<string>();
-        foreach (var (ids, target) in new[] { (plan.FullTunnel ? plan.DirectCategories : Array.Empty<string>(), direct), (plan.FullTunnel ? Array.Empty<string>() : plan.ProxyCategories, proxy) })
+        foreach (var (ids, target) in new[] { (plan.FullTunnel ? plan.DirectCategories : Array.Empty<string>(), direct), (plan.FullTunnel ? Array.Empty<string>() : plan.ProxyCategories, proxy), (plan.WarpCategories, warp) })
         {
             foreach (var category in ids.Select(RuleCatalog.Find).Where(c => c is not null).Select(c => c!))
             {
@@ -467,7 +506,7 @@ internal sealed partial class AppController
                 ToolTipIcon.Warning);
         }
         _missingNotice = notice;
-        return (proxy, direct, stamps.ToString());
+        return (proxy, direct, warp, stamps.ToString());
     }
 
     private bool _rulesMissing;
@@ -569,6 +608,10 @@ internal sealed partial class AppController
             LocalDnsDomains = launch.LocalDns,
             HostIpv6 = launch.HostIpv6,
             SystemProxyPort = launch.ProxyPort,
+            WarpPort = launch.WarpPort,
+            WarpDomains = plan.WarpDomains,
+            WarpRuleSets = launch.WarpSets,
+            XboxDns = plan.XboxDns,
         };
         return SingBoxConfig.Build(launch.Servers, launch.ActiveTag, options);
     }
@@ -753,6 +796,54 @@ internal sealed partial class AppController
             Notify?.Invoke("Прокси", "Не удалось изменить системный прокси Windows: " + ex.Message, ToolTipIcon.Warning);
         }
     }
+
+    private async Task ReleaseWarpAsync()
+    {
+        if (!_warpActive) return;
+        _warpActive = false;
+        await Task.Run(() => WarpClient.RestoreAsync(CancellationToken.None));
+    }
+
+    /// <summary>WARP on/off in Obkhodiki; its sites and categories are kept either way.</summary>
+    public Task SetWarpEnabledAsync(bool on) => Serialized(on ? "Подключение Cloudflare WARP…" : "Отключение Cloudflare WARP…", silentErrors: false, async () =>
+    {
+        if (on && !WarpClient.IsInstalled)
+        {
+            throw new InvalidOperationException("Cloudflare WARP не установлен. Установите его с https://one.one.one.one (приложение можно не запускать) и включите снова.");
+        }
+        var was = Settings.WarpEnabled;
+        Settings.WarpEnabled = on;
+        _settingsStore.Save(Settings);
+        try
+        {
+            if (on && (_servers.Count == 0 || !Settings.VpnEnabled)) throw new InvalidOperationException("WARP работает вместе с VPS: добавьте сервер и включите VPS.");
+            await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+        }
+        catch
+        {
+            Settings.WarpEnabled = was;
+            _settingsStore.Save(Settings);
+            await ApplyVpnCoreAsync(interactive: false, needProbe: false);
+            throw;
+        }
+    });
+
+    public Task SetWarpListsAsync(IReadOnlyList<string> domains, IReadOnlyList<string> categories) =>
+        Serialized("Настройка WARP…", silentErrors: false, async () =>
+        {
+            Settings.WarpDomains = domains.Select(SingBoxConfig.NormalizeDomain).Where(d => d is not null).Select(d => d!).Distinct().ToList();
+            Settings.WarpCategories = RuleCatalog.Sanitize(categories, RuleCatalog.Proxy);
+            _settingsStore.Save(Settings);
+            await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+        });
+
+    public Task SetXboxDnsAsync(bool on) => Serialized(on ? "Включение xbox-dns…" : "Выключение xbox-dns…", silentErrors: false, async () =>
+    {
+        if (on && (_servers.Count == 0 || !Settings.VpnEnabled)) throw new InvalidOperationException("DNS xbox-dns работает вместе с VPS: добавьте сервер и включите VPS.");
+        Settings.XboxDnsEnabled = on;
+        _settingsStore.Save(Settings);
+        await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+    });
 
     private static void RestoreSystemProxy()
     {
@@ -1132,6 +1223,8 @@ internal sealed partial class AppController
     private void DisposeVpn()
     {
         RestoreSystemProxy();
+        // Leave WARP as the user had it; a short wait at most, exit must not hang on it.
+        if (_warpActive) WarpClient.RestoreAsync(CancellationToken.None).Wait(TimeSpan.FromSeconds(10));
         _gameWatch?.Dispose();
         _localHttp.Dispose();
         _singBoxInstance?.Dispose();

@@ -71,6 +71,18 @@ public sealed class AppSettings
     /// <summary>Rule-set categories kept direct in full-tunnel mode (ids from RuleCatalog.Direct).</summary>
     public List<string> VpnDirectCategories { get; set; } = new() { "ru" };
 
+    /// <summary>Cloudflare WARP (the installed official client, in its proxy mode) as a third path besides direct and VPS.</summary>
+    public bool WarpEnabled { get; set; }
+
+    /// <summary>Sites (domains and their subdomains) that go through WARP.</summary>
+    public List<string> WarpDomains { get; set; } = new();
+
+    /// <summary>Rule-set categories that go through WARP (ids from RuleCatalog.Proxy).</summary>
+    public List<string> WarpCategories { get; set; } = new() { "ai" };
+
+    /// <summary>Look up names through the xbox-dns.ru smart DNS (see SingBoxConfig.XboxDns).</summary>
+    public bool XboxDnsEnabled { get; set; }
+
     /// <summary>Tag of the chosen server (see VpnServerEntry.TagFor).</summary>
     public string? VpnSelectedServer { get; set; }
 
@@ -151,6 +163,9 @@ public sealed class AppSettingsStore
             .Where(e => e is not null).Select(e => e!).Distinct().ToList();
         s.VpnProxyCategories = Vpn.RuleCatalog.Sanitize(s.VpnProxyCategories, Vpn.RuleCatalog.Proxy);
         s.VpnDirectCategories = Vpn.RuleCatalog.Sanitize(s.VpnDirectCategories, Vpn.RuleCatalog.Direct);
+        s.WarpDomains = (s.WarpDomains ?? new()).Select(d => d is null ? null : Vpn.SingBoxConfig.NormalizeDomain(d))
+            .Where(d => d is not null).Select(d => d!).Distinct().ToList();
+        s.WarpCategories = Vpn.RuleCatalog.Sanitize(s.WarpCategories, Vpn.RuleCatalog.Proxy);
         if (s.VpnSelectedServer is { } tag && !System.Text.RegularExpressions.Regex.IsMatch(tag, "^s-[0-9a-f]{10}$")) s.VpnSelectedServer = null;
         return s;
     }

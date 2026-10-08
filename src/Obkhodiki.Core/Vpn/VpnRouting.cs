@@ -25,6 +25,15 @@ public sealed record VpnPlan(
     /// </summary>
     public bool ProxyMode { get; init; }
 
+    /// <summary>Through Cloudflare WARP (empty when WARP is off).</summary>
+    public IReadOnlyList<string> WarpDomains { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> WarpCategories { get; init; } = Array.Empty<string>();
+
+    public bool UsesWarp => WarpDomains.Count > 0 || WarpCategories.Count > 0;
+
+    /// <summary>Names are looked up through xbox-dns.ru.</summary>
+    public bool XboxDns { get; init; }
+
     /// <summary>The app's own traffic (downloads, direct-path measurements) never rides the tunnel.</summary>
     public const string SelfProcess = "Obkhodiki.exe";
 
@@ -34,10 +43,10 @@ public sealed record VpnPlan(
     }
 
     /// <summary>Something has to go through the VPS (with a tunnel, or through the proxy in proxy mode).</summary>
-    public bool NeedsTunnel => FullTunnel || Processes.Count > 0 || Domains.Count > 0 || ProxyCategories.Count > 0;
+    public bool NeedsTunnel => FullTunnel || Processes.Count > 0 || Domains.Count > 0 || ProxyCategories.Count > 0 || UsesWarp || XboxDns;
 
     /// <summary>Rule-set categories the active mode uses.</summary>
-    public IEnumerable<string> ActiveCategories => FullTunnel ? DirectCategories : ProxyCategories;
+    public IEnumerable<string> ActiveCategories => (FullTunnel ? DirectCategories : ProxyCategories).Concat(WarpCategories).Distinct();
 
     /// <param name="autoVpnProcesses">Auto games a measurement sent through the VPS this session.</param>
     /// <param name="autoDecidedProcesses">Auto games measured this session (either way).</param>
@@ -86,6 +95,9 @@ public sealed record VpnPlan(
         {
             BypassProcesses = bypass,
             ProxyMode = settings.VpnProxyMode,
+            WarpDomains = settings.WarpEnabled ? settings.WarpDomains.ToList() : Array.Empty<string>(),
+            WarpCategories = settings.WarpEnabled ? RuleCatalog.Sanitize(settings.WarpCategories, RuleCatalog.Proxy) : Array.Empty<string>(),
+            XboxDns = settings.XboxDnsEnabled,
             BypassEntries = settings.VpnBypassEntries.Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList(),
         };
     }

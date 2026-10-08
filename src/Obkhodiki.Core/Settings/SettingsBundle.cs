@@ -113,6 +113,10 @@ public sealed class PortableSettings
     public List<string> VpnProxyCategories { get; set; } = new();
     public List<string> VpnDirectCategories { get; set; } = new() { "ru" };
     public bool VpnAutoBest { get; set; } = true;
+    public bool WarpEnabled { get; set; }
+    public List<string> WarpDomains { get; set; } = new();
+    public List<string> WarpCategories { get; set; } = new() { "ai" };
+    public bool XboxDnsEnabled { get; set; }
     public string AppTheme { get; set; } = "system";
     public string AppPalette { get; set; } = "cat";
 
@@ -136,6 +140,10 @@ public sealed class PortableSettings
         VpnProxyCategories = s.VpnProxyCategories.ToList(),
         VpnDirectCategories = s.VpnDirectCategories.ToList(),
         VpnAutoBest = s.VpnAutoBest,
+        WarpEnabled = s.WarpEnabled,
+        WarpDomains = s.WarpDomains.ToList(),
+        WarpCategories = s.WarpCategories.ToList(),
+        XboxDnsEnabled = s.XboxDnsEnabled,
         AppTheme = s.AppTheme,
         AppPalette = s.AppPalette,
     };
@@ -161,6 +169,10 @@ public sealed class PortableSettings
         target.VpnProxyCategories = VpnProxyCategories ?? new();
         target.VpnDirectCategories = VpnDirectCategories ?? new();
         target.VpnAutoBest = VpnAutoBest;
+        target.WarpEnabled = WarpEnabled;
+        target.WarpDomains = WarpDomains ?? new();
+        target.WarpCategories = WarpCategories ?? new();
+        target.XboxDnsEnabled = XboxDnsEnabled;
         target.AppTheme = AppTheme is "system" or "light" or "dark" ? AppTheme : "system";
         target.AppPalette = AppPalette is { Length: > 0 and <= 32 } p && p.All(c => char.IsAsciiLetterLower(c) || c == '-') ? p : "cat";
         AppSettingsStore.Sanitize(target);

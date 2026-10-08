@@ -44,6 +44,8 @@ internal sealed partial class AppController
         Line();
         Line("== VPS ==");
         Line($"sing-box: {SingBoxVersion ?? "не установлен"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning}; весь трафик: {Settings.VpnFullTunnel}; режим: {(Settings.VpnProxyMode ? "прокси" : "туннель")}{(SystemProxyAddress is { } proxy ? $" ({proxy})" : "")}");
+        Line($"Cloudflare WARP: {(WarpClient.IsInstalled ? "установлен" : "не установлен")}; включён в Obkhodiki: {Settings.WarpEnabled}; " +
+             $"сайтов {Settings.WarpDomains.Count}, категории [{string.Join(", ", Settings.WarpCategories)}]; DNS xbox-dns: {Settings.XboxDnsEnabled}");
         Line($"Источник: {VpnServerName ?? "не задан"}");
         foreach (var s in VpnServers)
         {
