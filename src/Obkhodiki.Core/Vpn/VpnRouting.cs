@@ -42,8 +42,25 @@ public sealed record VpnPlan(
     {
     }
 
+    /// <summary>WARP or xbox-dns is on: sing-box has to run even without the VPS.</summary>
+    public bool UsesExtras => UsesWarp || XboxDns;
+
     /// <summary>Something has to go through the VPS (with a tunnel, or through the proxy in proxy mode).</summary>
-    public bool NeedsTunnel => FullTunnel || Processes.Count > 0 || Domains.Count > 0 || ProxyCategories.Count > 0 || UsesWarp || XboxDns;
+    public bool NeedsTunnel => FullTunnel || Processes.Count > 0 || Domains.Count > 0 || ProxyCategories.Count > 0 || UsesExtras;
+
+    /// <summary>
+    /// The plan for running without the VPS (no server, or the VPS is off): only the WARP and xbox-dns rules, plus
+    /// the "never through the VPS" list, which still beats WARP. Nothing is sent to the VPS.
+    /// </summary>
+    public VpnPlan WithoutVps() => this with
+    {
+        Processes = Array.Empty<string>(),
+        Domains = Array.Empty<string>(),
+        FullTunnel = false,
+        DirectProcesses = Array.Empty<string>(),
+        ProxyCategories = Array.Empty<string>(),
+        DirectCategories = Array.Empty<string>(),
+    };
 
     /// <summary>Rule-set categories the active mode uses.</summary>
     public IEnumerable<string> ActiveCategories => (FullTunnel ? DirectCategories : ProxyCategories).Concat(WarpCategories).Distinct();

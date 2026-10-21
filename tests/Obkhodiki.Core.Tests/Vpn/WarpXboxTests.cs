@@ -142,6 +142,86 @@ public class WarpXboxTests
     }
 
     [Fact]
+    public void NoServers_SelectorFallsBackToDirect_WarpAndXboxStillApply()
+    {
+        var json = JsonNode.Parse(SingBoxConfig.Build(Array.Empty<VpnServerEntry>(), "gone",
+            new SingBoxOptions(true, 20000, Array.Empty<string>(), Array.Empty<string>(), "log.txt", new ProbeCredentials("u", "p"))
+            {
+                WarpPort = 40000,
+                WarpDomains = new[] { "gemini.google.com" },
+                XboxDns = true,
+            }))!;
+
+        var outbounds = json["outbounds"]!.AsArray();
+        var selector = Assert.Single(outbounds, o => (string?)o!["tag"] == "proxy")!;
+        Assert.Equal(new[] { "direct" }, selector["outbounds"]!.AsArray().Select(o => (string?)o));
+        Assert.Equal("direct", (string?)selector["default"]);
+        Assert.Equal(new[] { "selector", "direct", "socks" }, outbounds.Select(o => (string?)o!["type"]));
+
+        Assert.Equal("direct", (string?)json["route"]!["final"]);
+        Assert.Contains(Rules(json), r => (string?)r!["outbound"] == "warp" && (string?)r["domain_suffix"]![0] == "gemini.google.com");
+        // Only the probe port's own user still points at the selector; nothing else goes to "proxy".
+        Assert.Single(Rules(json), r => (string?)r!["outbound"] == "proxy");
+        Assert.Single(json["inbounds"]!.AsArray().First(i => (string?)i!["tag"] == "probe-in")!["users"]!.AsArray());
+
+        var dns = json["dns"]!;
+        Assert.Equal("xbox", (string?)dns["final"]);
+        Assert.DoesNotContain(dns["servers"]!.AsArray(), s => (string?)s!["tag"] == "remote");
+        Assert.Contains(Rules(json), r => (string?)r!["action"] == "hijack-dns");
+    }
+
+    [Fact]
+    public void Plan_WithoutVps_KeepsOnlyWarpXboxAndBypass()
+    {
+        var settings = new AppSettings
+        {
+            VpnFullTunnel = true,
+            VpnProcesses = new() { "chrome.exe" },
+            VpnDomains = new() { "chatgpt.com" },
+            VpnProxyCategories = new() { "ai" },
+            VpnBypassProcesses = new() { "steam.exe" },
+            VpnBypassEntries = new() { "sberbank.ru" },
+            VpnProxyMode = true,
+            WarpEnabled = true,
+            WarpDomains = new() { "gemini.google.com" },
+            XboxDnsEnabled = true,
+        };
+        var plan = VpnPlan.From(settings, new[] { "game.exe" }).WithoutVps();
+
+        Assert.False(plan.FullTunnel);
+        Assert.Empty(plan.Processes);
+        Assert.Empty(plan.Domains);
+        Assert.Empty(plan.DirectProcesses);
+        Assert.Empty(plan.ProxyCategories);
+        Assert.Empty(plan.DirectCategories);
+        Assert.Equal(new[] { "gemini.google.com" }, plan.WarpDomains);
+        Assert.True(plan.XboxDns);
+        Assert.True(plan.UsesExtras);
+        Assert.True(plan.ProxyMode);
+        Assert.Equal(new[] { "steam.exe" }, plan.BypassProcesses);
+        Assert.Equal(new[] { "sberbank.ru" }, plan.BypassEntries);
+        // Only WARP's categories are left to download.
+        Assert.Equal(plan.WarpCategories, plan.ActiveCategories);
+
+        var none = VpnPlan.From(new AppSettings { VpnDomains = new() { "chatgpt.com" } }, Array.Empty<string>()).WithoutVps();
+        Assert.False(none.UsesExtras);
+        Assert.False(none.NeedsTunnel);
+    }
+
+    [Fact]
+    public void TrafficMeter_DoesNotCountWarpAsVps()
+    {
+        Assert.False(new ClashConnection("1", 10, 10, new[] { "warp" }).ViaVpn);
+        Assert.False(new ClashConnection("2", 10, 10, new[] { "direct", "proxy" }).ViaVpn);
+        Assert.True(new ClashConnection("3", 10, 10, new[] { "srv", "proxy" }).ViaVpn);
+
+        var meter = new VpnTrafficMeter();
+        meter.Update(new[] { new ClashConnection("1", 100, 200, new[] { "warp" }), new ClashConnection("3", 5, 7, new[] { "srv", "proxy" }) });
+        Assert.Equal(5, meter.Upload);
+        Assert.Equal(7, meter.Download);
+    }
+
+    [Fact]
     public void BadWarpPort_Throws()
     {
         Assert.Throws<ArgumentException>(() => Build(full: true, warpPort: 80));

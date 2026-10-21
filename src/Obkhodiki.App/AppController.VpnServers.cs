@@ -186,7 +186,7 @@ internal sealed partial class AppController
     /// <summary>Switches the live selector; new connections use the server right away, running ones stay.</summary>
     private async Task SwitchRunningServerAsync(string tag)
     {
-        if (_clash is not { } clash || !IsVpnRunning) return;
+        if (_clash is not { } clash || !IsVpsRunning) return;
         await clash.SelectAsync(SingBoxConfig.ProxyTag, tag, CancellationToken.None);
         if (_appliedLaunch is { } launch) _appliedLaunch = launch with { ActiveTag = tag };
         Log.Info($"VPS server switched to {Describe(tag)}");
@@ -321,7 +321,7 @@ internal sealed partial class AppController
             await ApplyVpnAsync(interactive: false, refreshRules: true);
         }
 
-        if (Settings.VpnAutoBest && _servers.Count > 1 && IsVpnRunning && _clash is { } clash && now >= _nextBestCheck
+        if (Settings.VpnAutoBest && _servers.Count > 1 && IsVpsRunning && _clash is { } clash && now >= _nextBestCheck
             && BusyText is null && _autoPing is null)
         {
             _nextBestCheck = now + AutoBestInterval;

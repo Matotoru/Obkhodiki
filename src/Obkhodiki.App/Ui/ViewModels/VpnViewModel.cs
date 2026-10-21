@@ -82,8 +82,13 @@ public sealed partial class VpnViewModel : ObservableObject
     public IReadOnlyList<CategoryOption> DirectCategories { get; }
     public IReadOnlyList<CategoryOption> WarpCategories { get; }
 
-    [ObservableProperty] private bool _warpEnabled;
-    [ObservableProperty] private bool _xboxDns;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowConnectionMode))]
+    private bool _warpEnabled;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowConnectionMode))]
+    private bool _xboxDns;
     [ObservableProperty] private string _warpDomainsText = "";
     [ObservableProperty] private bool _warpDirty;
     public bool WarpInstalled => WarpClient.IsInstalled;
@@ -138,6 +143,9 @@ public sealed partial class VpnViewModel : ObservableObject
 
     public bool HasServer => ServerName is not null;
     public bool ShowServerForm => !HasServer || IsEditingServer;
+
+    /// <summary>Tunnel or proxy matters with a server, and for WARP and xbox-dns without one.</summary>
+    public bool ShowConnectionMode => HasServer || WarpEnabled || XboxDns;
     public string MeasureButtonText => IsMeasuring ? "Остановить" : "Измерить";
 
     public VpnViewModel(ShellViewModel shell)
@@ -336,12 +344,13 @@ public sealed partial class VpnViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasServer));
         OnPropertyChanged(nameof(ShowServerForm));
+        OnPropertyChanged(nameof(ShowConnectionMode));
     }
 
     internal void Refresh(AppController c)
     {
         ServerName = c.VpnServerName;
-        IsRunning = c.IsVpnRunning;
+        IsRunning = c.IsVpsRunning;
         IsBusy = c.BusyText is not null;
         SingBoxVersion = c.SingBoxVersion ?? "не установлен";
         ProxyAddress = c.SystemProxyAddress;

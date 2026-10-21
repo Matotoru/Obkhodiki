@@ -80,7 +80,8 @@ public sealed record ProbeCredentials(string User, string Password)
 
 /// <summary>
 /// Builds a sing-box (1.12+) configuration. All servers sit behind one selector ("proxy"), so the active server
-/// can be switched through the Clash API without restarting the tunnel.
+/// can be switched through the Clash API without restarting the tunnel. With no servers (WARP and xbox-dns
+/// without the VPS) the selector holds only "direct".
 /// </summary>
 public static partial class SingBoxConfig
 {
@@ -150,7 +151,6 @@ public static partial class SingBoxConfig
 
     public static string Build(IReadOnlyList<VpnServerEntry> servers, string? activeTag, SingBoxOptions options)
     {
-        if (servers.Count == 0) throw new ArgumentException("At least one server is required.");
         if (servers.Select(s => s.Tag).Distinct().Count() != servers.Count) throw new ArgumentException("Server tags must be unique.");
         if (servers.Any(s => s.Tag is ProxyTag or "direct" or WarpTag)) throw new ArgumentException("Reserved server tag.");
         if (options.WarpPort is < 1024 or > 65535) throw new ArgumentException("Invalid WARP port.");
@@ -236,12 +236,14 @@ public static partial class SingBoxConfig
 
         var outbounds = new JsonArray();
         foreach (var s in servers) outbounds.Add(s.Server.ToOutbound(s.Tag));
-        var active = servers.Any(s => s.Tag == activeTag) ? activeTag! : servers[0].Tag;
+        // No servers: whatever still points at the selector (the probe port) goes out directly.
+        var choices = servers.Count > 0 ? servers.Select(s => s.Tag).ToList() : new List<string> { "direct" };
+        var active = choices.Contains(activeTag ?? "") ? activeTag! : choices[0];
         outbounds.Add(new JsonObject
         {
             ["type"] = "selector",
             ["tag"] = ProxyTag,
-            ["outbounds"] = LinkParsing.Array(servers.Select(s => s.Tag)),
+            ["outbounds"] = LinkParsing.Array(choices),
             ["default"] = active,
             // Switching servers keeps running connections (a game in progress) on the server they started on.
             ["interrupt_exist_connections"] = false,

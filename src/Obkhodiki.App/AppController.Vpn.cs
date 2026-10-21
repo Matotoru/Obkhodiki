@@ -115,7 +115,11 @@ internal sealed partial class AppController
     /// <summary>Asked (UI thread) before accepting something that weakens the connection's protection.</summary>
     public Func<string, bool> ConfirmVpnRisk { get; set; } = _ => false;
 
+    /// <summary>sing-box runs: with the VPS, or only for WARP and xbox-dns.</summary>
     public bool IsVpnRunning => _singBoxInstance?.IsRunning == true;
+
+    /// <summary>sing-box runs with the VPS servers loaded (not the WARP/xbox-dns-only mode).</summary>
+    public bool IsVpsRunning => IsVpnRunning && _appliedLaunch is { Servers.Count: > 0 };
     public ReleaseInfo? AvailableSbUpdate => _availableSbUpdate;
     public string? SingBoxVersion => _sbStore.ActiveVersion;
 
@@ -222,6 +226,8 @@ internal sealed partial class AppController
         _pings.Clear();
         _appliedSignature = null;
         _appliedLaunch = null;
+        // WARP and xbox-dns keep working without the server.
+        await ApplyVpnCoreAsync(interactive: true, needProbe: false);
     });
 
     /// <returns>True when saved and applied; errors are shown as a notification.</returns>
@@ -273,7 +279,7 @@ internal sealed partial class AppController
         try
         {
             await ApplyVpnCoreAsync(interactive: true, needProbe: false);
-            if (on && !IsVpnRunning) throw new InvalidOperationException("VPS не запустился.");
+            if (on && !IsVpsRunning) throw new InvalidOperationException("VPS не запустился.");
         }
         catch
         {
@@ -320,7 +326,7 @@ internal sealed partial class AppController
             }
         }
         await ApplyVpnCoreAsync(interactive: true, needProbe: false);
-        Log.Info(on ? "VPS turned on" : "VPS turned off: sing-box stopped");
+        Log.Info(on ? "VPS turned on" : IsVpnRunning ? "VPS turned off: sing-box keeps only WARP/xbox-dns" : "VPS turned off: sing-box stopped");
     });
 
     public Task SetGameRouteAsync(string id, GameRoute route) => Serialized("Настройка маршрута…", silentErrors: false, async () =>
@@ -365,8 +371,16 @@ internal sealed partial class AppController
     {
         ReloadSource();
         var plan = CurrentPlan();
+        var source = _source;
+        var withVps = source is not null && _servers.Count > 0 && Settings.VpnEnabled && (plan.NeedsTunnel || needProbe);
+        // Without the VPS, WARP and xbox-dns still need sing-box: it runs with their rules only and no servers.
+        if (!withVps)
+        {
+            source = null;
+            plan = plan.WithoutVps();
+        }
 
-        if (_source is null || _servers.Count == 0 || !Settings.VpnEnabled || (!plan.NeedsTunnel && !needProbe))
+        if (!withVps && !plan.UsesExtras)
         {
             if (IsVpnRunning) await Task.Run(SingBox.Stop);
             RestoreSystemProxy();
@@ -382,7 +396,9 @@ internal sealed partial class AppController
         {
             if (!interactive || !await InstallFirstSingBoxAsync())
             {
-                Notify?.Invoke("VPS", "sing-box не установлен: откройте «VPS» и сохраните ссылку ещё раз.", ToolTipIcon.Warning);
+                Notify?.Invoke("VPS", withVps
+                    ? "sing-box не установлен: откройте «VPS» и сохраните ссылку ещё раз."
+                    : "sing-box не установлен: откройте «VPS» и включите WARP или xbox-dns ещё раз.", ToolTipIcon.Warning);
                 return;
             }
         }
@@ -392,7 +408,7 @@ internal sealed partial class AppController
         var proxyMode = plan.NeedsTunnel && plan.ProxyMode;
         var tun = plan.NeedsTunnel && !proxyMode;
         var hostIpv6 = HostHasIpv6();
-        var signature = $"{_source.Signature()}|{tun}|proxy={proxyMode}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
+        var signature = $"{source?.Signature() ?? "no-vps"}|{tun}|proxy={proxyMode}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
                         $"{string.Join(",", plan.DirectProcesses)}|{string.Join(",", plan.BypassProcesses)}|{string.Join(",", plan.BypassEntries)}|" +
                         $"{stamps}|v6={hostIpv6}|warp={string.Join(",", plan.WarpDomains)};{string.Join(",", plan.WarpCategories)}|xbox={plan.XboxDns}";
         if (IsVpnRunning && signature == _appliedSignature)
@@ -427,8 +443,9 @@ internal sealed partial class AppController
             await ReleaseWarpAsync();
         }
 
-        var localDns = new[] { "raw.githubusercontent.com", _source.SubscriptionHost }.Where(h => h is not null).Select(h => h!).ToList();
-        var launch = await DropRejectedServersAsync(new SingBoxLaunch(_servers, ActiveServerTag, tun, plan, proxySets, directSets, localDns, hostIpv6,
+        var localDns = new[] { "raw.githubusercontent.com", source?.SubscriptionHost }.Where(h => h is not null).Select(h => h!).ToList();
+        var servers = withVps ? _servers : Array.Empty<VpnServerEntry>();
+        var launch = await DropRejectedServersAsync(new SingBoxLaunch(servers, withVps ? ActiveServerTag : null, tun, plan, proxySets, directSets, localDns, hostIpv6,
             proxyMode ? ProxyPortFor() : null)
         {
             WarpSets = warpSets,
@@ -446,7 +463,7 @@ internal sealed partial class AppController
         _appliedSignature = signature;
         _appliedLaunch = launch;
         SyncSystemProxy();
-        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {_source.Describe()}, tunnel {tun}, proxy {launch.ProxyPort?.ToString() ?? "off"}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
+        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {source?.Describe() ?? "no VPS (WARP/xbox-dns only)"}, tunnel {tun}, proxy {launch.ProxyPort?.ToString() ?? "off"}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
                  $"processes [{string.Join(", ", plan.Processes)}], domains {plan.Domains.Count}, rule-sets [{string.Join(", ", proxySets.Concat(directSets).Select(r => r.Tag))}]");
         Changed();
     }
@@ -629,7 +646,7 @@ internal sealed partial class AppController
             return await download(direct, cts.Token);
         }
         // Also on "wrong content": a block page or DPI stub answers 200 with HTML.
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidDataException && IsVpnRunning && _probeAuth is not null)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidDataException && IsVpsRunning && _probeAuth is not null)
         {
             Log.Info("Direct download failed, retrying through the VPS: " + ex.Message);
             var handler = new SocketsHttpHandler
@@ -816,7 +833,6 @@ internal sealed partial class AppController
         _settingsStore.Save(Settings);
         try
         {
-            if (on && (_servers.Count == 0 || !Settings.VpnEnabled)) throw new InvalidOperationException("WARP работает вместе с VPS: добавьте сервер и включите VPS.");
             await ApplyVpnCoreAsync(interactive: true, needProbe: false);
         }
         catch
@@ -839,7 +855,6 @@ internal sealed partial class AppController
 
     public Task SetXboxDnsAsync(bool on) => Serialized(on ? "Включение xbox-dns…" : "Выключение xbox-dns…", silentErrors: false, async () =>
     {
-        if (on && (_servers.Count == 0 || !Settings.VpnEnabled)) throw new InvalidOperationException("DNS xbox-dns работает вместе с VPS: добавьте сервер и включите VPS.");
         Settings.XboxDnsEnabled = on;
         _settingsStore.Save(Settings);
         await ApplyVpnCoreAsync(interactive: true, needProbe: false);
@@ -893,7 +908,7 @@ internal sealed partial class AppController
             {
                 // Make sure the probe port exists (starts sing-box without the tunnel if nothing else needs it).
                 await ApplyVpnCoreAsync(interactive, needProbe: true);
-                if (!IsVpnRunning || _probeAuth is null) throw new InvalidOperationException("sing-box не запущен.");
+                if (!IsVpsRunning || _probeAuth is null) throw new InvalidOperationException("sing-box не запущен.");
                 // The port was free when chosen; make sure it is really sing-box answering before sending credentials.
                 // Exactly one listener, and it is sing-box: a second socket sharing the port could receive the credentials.
                 var listeners = NativeProcess.TcpListenerPids(_probePort);
@@ -958,7 +973,7 @@ internal sealed partial class AppController
 
     private async Task MeasureVpnTrafficAsync()
     {
-        if (!IsVpnRunning || _clash is not { } clash) return;
+        if (!IsVpsRunning || _clash is not { } clash) return;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         if (await clash.ConnectionsAsync(cts.Token) is not { } connections) return;
         var before = _vpnMeter.Upload + _vpnMeter.Download;

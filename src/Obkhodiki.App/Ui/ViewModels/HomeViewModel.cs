@@ -87,7 +87,7 @@ public sealed partial class HomeViewModel : ObservableObject
             TelegramOn = c.IsTgRunning;
             TelegramSummary = c.TgVersion is null ? "Не установлен" : TelegramOn ? $"Прокси работает · {c.TgVersion}" : "Прокси выключен";
 
-            VpnOn = c.IsVpnRunning;
+            VpnOn = c.IsVpsRunning;
             HasVpn = c.VpnServerName is not null;
             if (!IsBusy)
             {

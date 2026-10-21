@@ -17,7 +17,8 @@ public sealed record ClashApiOptions(int Port, string Secret)
 /// <param name="Chains">Outbounds the connection went through, innermost first (e.g. server tag, "proxy"); ["direct"] when not via the VPS.</param>
 public sealed record ClashConnection(string Id, long Upload, long Download, IReadOnlyList<string> Chains)
 {
-    public bool ViaVpn => Chains.Count > 0 && !Chains.Contains("direct") && !Chains.Contains("block");
+    // WARP is a path of its own, not the VPS.
+    public bool ViaVpn => Chains.Count > 0 && !Chains.Contains("direct") && !Chains.Contains("block") && !Chains.Contains(SingBoxConfig.WarpTag);
 }
 
 /// <summary>

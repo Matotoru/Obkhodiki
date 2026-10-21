@@ -43,7 +43,7 @@ internal sealed partial class AppController
         if (Settings.GameProfiles.Count == 0) Line("нет");
         Line();
         Line("== VPS ==");
-        Line($"sing-box: {SingBoxVersion ?? "не установлен"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning}; весь трафик: {Settings.VpnFullTunnel}; режим: {(Settings.VpnProxyMode ? "прокси" : "туннель")}{(SystemProxyAddress is { } proxy ? $" ({proxy})" : "")}");
+        Line($"sing-box: {SingBoxVersion ?? "не установлен"}; включён: {Settings.VpnEnabled}; работает: {IsVpnRunning} (с VPS: {IsVpsRunning}); весь трафик: {Settings.VpnFullTunnel}; режим: {(Settings.VpnProxyMode ? "прокси" : "туннель")}{(SystemProxyAddress is { } proxy ? $" ({proxy})" : "")}");
         Line($"Cloudflare WARP: {(WarpClient.IsInstalled ? "установлен" : "не установлен")}; включён в Obkhodiki: {Settings.WarpEnabled}; " +
              $"сайтов {Settings.WarpDomains.Count}, категории [{string.Join(", ", Settings.WarpCategories)}]; DNS xbox-dns: {Settings.XboxDnsEnabled}");
         Line($"Источник: {VpnServerName ?? "не задан"}");
@@ -101,7 +101,7 @@ internal sealed partial class AppController
         using var nowHttp = new HttpClient(HttpConnectivityProbe.CreateNonPoolingHandler()) { Timeout = Timeout.InfiniteTimeSpan };
         var nowProbe = new HttpConnectivityProbe(nowHttp, TimeSpan.FromSeconds(8));
         HttpClient? vpnHttp = null;
-        if (IsVpnRunning && _probeAuth is { } auth)
+        if (IsVpsRunning && _probeAuth is { } auth)
         {
             vpnHttp = new HttpClient(new SocketsHttpHandler
             {
