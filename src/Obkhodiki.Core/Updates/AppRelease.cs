@@ -21,6 +21,7 @@ public static class AppInfo
         new Credit("zapret", "bol-van", "MIT", "движок обхода DPI (winws)", "https://github.com/bol-van/zapret"),
         new Credit("zapret-discord-youtube", "Flowseal", "MIT", "стратегии и сборка zapret для Windows", "https://github.com/Flowseal/zapret-discord-youtube"),
         new Credit("WinDivert", "basil00", "LGPL-3.0 / GPL-2.0", "драйвер перехвата пакетов", "https://github.com/basil00/WinDivert"),
+        new Credit("zapret-win-bundle (windivert-hide)", "bol-van", "MIT", "скрытие драйвера от античита", "https://github.com/bol-van/zapret-win-bundle"),
         new Credit("tg-ws-proxy", "Flowseal", "MIT", "прокси для Telegram", "https://github.com/Flowseal/tg-ws-proxy"),
         new Credit("sing-box", "nekohasekai (SagerNet)", "GPL-3.0", "туннель к VPS", "https://github.com/SagerNet/sing-box"),
         new Credit("sing-geosite / sing-geoip", "nekohasekai (SagerNet)", "GPL-3.0", "наборы правил маршрутизации", "https://github.com/SagerNet/sing-geosite"),
@@ -56,6 +57,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.11.0", new[]
+        {
+            "Скрытие драйвера от античита: на странице «Обход блокировок» новый переключатель для игр, которые не запускаются с обходом (например, Call of Duty). Obkhodiki ставит драйвер WinDivert под другим именем (сборка windivert-hide от разработчика zapret). Помогает против простой проверки, не скрывает драйвер полностью, за обход защиты античита теоретически можно получить блокировку в игре — поэтому по умолчанию выключено и с предупреждением.",
+        }),
         new Entry("0.10.0", new[]
         {
             "Cloudflare WARP как третий путь рядом с «напрямую» и VPS: на странице VPS выберите категории и сайты, которые пойдут через установленный WARP (One Client). Obkhodiki сама переводит его в режим прокси и при выключении возвращает прежний режим.",

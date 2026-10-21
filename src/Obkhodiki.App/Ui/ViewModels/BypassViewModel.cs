@@ -48,6 +48,7 @@ public sealed partial class BypassViewModel : ObservableObject
 
     [ObservableProperty] private string? _selectedStrategy;
     [ObservableProperty] private GameFilterOption? _selectedGameFilter;
+    [ObservableProperty] private bool _hideDriver;
     [ObservableProperty] private bool _isSelecting;
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _progressText = "";
@@ -69,6 +70,29 @@ public sealed partial class BypassViewModel : ObservableObject
         _ = _shell.RunAsync(c => c.SetGameFilterAsync(value.Mode));
     }
 
+    partial void OnHideDriverChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = ToggleHideDriverAsync(value);
+    }
+
+    private async Task ToggleHideDriverAsync(bool value)
+    {
+        if (value && !await UiDialogs.ConfirmAsync(
+                "Скрыть драйвер от античита",
+                "Некоторые игры (например, Call of Duty с античитом Ricochet) не запускаются, пока работает обход, потому что видят драйвер WinDivert.\n\n" +
+                "Этот режим ставит драйвер под другим именем (версия windivert-hide от разработчика zapret). Он помогает только против простой проверки и НЕ скрывает драйвер полностью. " +
+                "Гарантий нет, а за обход защиты античита теоретически можно получить блокировку в игре. Включайте на свой страх и риск.",
+                "Включить"))
+        {
+            _syncing = true;
+            HideDriver = false;
+            _syncing = false;
+            return;
+        }
+        await _shell.RunAsync(c => c.SetHideDriverAsync(value));
+    }
+
     internal void Refresh(AppController c)
     {
         _syncing = true;
@@ -82,6 +106,7 @@ public sealed partial class BypassViewModel : ObservableObject
             }
             SelectedStrategy = c.ActiveStrategyName;
             SelectedGameFilter = GameFilterOptions.First(o => o.Mode == c.Settings.GameFilter);
+            HideDriver = c.Settings.HideDriver;
             FlowsealVersion = c.Engine?.Version ?? "—";
             ProblemsCount = c.Engine?.Problems.Count ?? 0;
         }

@@ -37,6 +37,12 @@ internal static class AppPaths
     public static readonly string SingBoxLog = Path.Combine(VpnRoot, "sing-box.log");
     public static readonly string RuleSetsDir = Path.Combine(VpnRoot, "rules");
 
+    /// <summary>Driver-hiding (bol-van windivert-hide): a cached patched WinDivert.dll and a run folder for winws
+    /// started with the renamed driver. Admin-only (inherits the root ACL) so winws runs only trusted binaries.</summary>
+    public static readonly string DriverHideDir = Path.Combine(Root, "driver-hide");
+    public static readonly string DriverHidePatchedDll = Path.Combine(DriverHideDir, "WinDivert.patched.dll");
+    public static readonly string DriverHideBinDir = Path.Combine(DriverHideDir, "bin");
+
     public static readonly string UserData = Path.Combine(Root, "user");
     public static readonly string UserLists = Path.Combine(UserData, "lists");
     public static readonly string Targets = Path.Combine(UserData, "targets.txt");

@@ -13,6 +13,7 @@ them unmodified. Their licenses apply to them; see the linked repositories for f
 | [zapret](https://github.com/bol-van/zapret) (winws) | bol-van | MIT | DPI bypass engine |
 | [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) | Flowseal | MIT | Strategies and the Windows build of zapret |
 | [WinDivert](https://github.com/basil00/WinDivert) | basil00 | LGPL-3.0 or GPL-2.0 | Packet capture driver (shipped inside the zapret build) |
+| [zapret-win-bundle](https://github.com/bol-van/zapret-win-bundle) (windivert-hide) | bol-van | MIT | Patched WinDivert.dll that installs the driver under another name (optional anti-cheat hiding; downloaded on demand) |
 | [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) | Flowseal | MIT | Telegram proxy |
 | [sing-box](https://github.com/SagerNet/sing-box) | nekohasekai (SagerNet) | GPL-3.0-or-later | VPS tunnel |
 | [sing-geosite](https://github.com/SagerNet/sing-geosite), [sing-geoip](https://github.com/SagerNet/sing-geoip) | nekohasekai (SagerNet) | GPL-3.0-or-later | Routing rule-sets (category-ru, geoip-ru, YouTube, Discord, …) |

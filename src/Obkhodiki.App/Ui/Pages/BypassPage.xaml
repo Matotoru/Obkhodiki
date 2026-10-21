@@ -35,6 +35,20 @@
         <ComboBox MinWidth="240" DisplayMemberPath="Title" ItemsSource="{Binding GameFilterOptions}" SelectedItem="{Binding SelectedGameFilter}" IsEnabled="{Binding IsSelecting, Converter={StaticResource InverseBool}}" />
       </ui:CardControl>
 
+      <ui:CardControl Margin="{StaticResource CardSpacing}">
+        <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="EyeOff24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Скрыть драйвер от античита" />
+            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap"
+                       Text="Для игр, которые не стартуют с обходом (Call of Duty и др.). Помогает не всегда и не скрывает драйвер полностью. На свой страх и риск." />
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ui:ToggleSwitch IsChecked="{Binding HideDriver}" OffContent="Выкл" OnContent="Вкл" IsEnabled="{Binding IsSelecting, Converter={StaticResource InverseBool}}" />
+      </ui:CardControl>
+
       <TextBlock Style="{StaticResource SectionTitle}" Text="Автоподбор" />
       <ui:Card Padding="20">
         <StackPanel>

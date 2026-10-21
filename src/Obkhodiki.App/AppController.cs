@@ -29,13 +29,15 @@ internal sealed partial class AppController : IDisposable
     private readonly EngineUpdater _updater;
     private volatile string? _busyText;
     private volatile EngineLayout? _engine;
+    // When driver hiding is on, winws runs from a prepared folder next to the renamed driver instead of the engine.
+    private volatile string? _winwsPathOverride;
     private volatile bool _autoSelecting;
     private volatile ReleaseInfo? _availableUpdate;
     private bool _confirmingUpdate;
 
     public AppController()
     {
-        _runner = new WinwsRunner(() => _engine?.WinwsPath ?? throw new InvalidOperationException("Engine is not installed."));
+        _runner = new WinwsRunner(() => _winwsPathOverride ?? _engine?.WinwsPath ?? throw new InvalidOperationException("Engine is not installed."));
         _runner.Crashed += OnCrashed;
         _updater = new EngineUpdater(new FlowsealReleaseClient(_http), _store);
         Settings = _settingsStore.Load();
@@ -267,6 +269,18 @@ internal sealed partial class AppController : IDisposable
             v => Settings.SelectedStrategy = v,
             name));
 
+    public Task SetHideDriverAsync(bool hide) => Serialized(hide ? "Загрузка скрытого драйвера…" : "Отключение скрытия драйвера…", silentErrors: false, async () =>
+    {
+        if (Settings.HideDriver == hide) return;
+        if (hide)
+        {
+            var engine = _engine ?? throw new InvalidOperationException("Движок Flowseal не установлен.");
+            if (!DriverHiding.HasSupportedDriver(engine.BinDir)) throw new InvalidOperationException(DriverHiding.UnsupportedDriverMessage);
+            await DriverHiding.DownloadAsync(_http, AppPaths.DriverHidePatchedDll, CancellationToken.None);
+        }
+        await ApplySettingWithRollback(() => Settings.HideDriver, v => Settings.HideDriver = v, hide);
+    });
+
     public Task SetGameFilterAsync(GameFilterMode mode) => Serialized("Смена игрового фильтра…", silentErrors: false, () =>
         ApplySettingWithRollback(
             () => Settings.GameFilter,
@@ -404,6 +418,8 @@ internal sealed partial class AppController : IDisposable
             Log.Error($"Engine files missing: {string.Join(", ", missing)}", null);
             throw new InvalidOperationException(EngineFiles.MissingMessage(missing, engine.BinDir));
         }
+
+        _winwsPathOverride = ApplyDriverHiding(engine);
         try
         {
             await _runner.StartAsync(args, CancellationToken.None).ConfigureAwait(false);
@@ -419,8 +435,44 @@ internal sealed partial class AppController : IDisposable
             Log.Error("winws could not be started", ex);
             throw new InvalidOperationException(EngineFiles.MissingMessage(new[] { "winws.exe" }, engine.BinDir), ex);
         }
-        Log.Info($"winws started: {strategy.Name}, game filter {Settings.GameFilter}, Flowseal {engine.Version}, " +
-                 $"sha256 {FileSha256(engine.WinwsPath)}, args: {string.Join(' ', args)}");
+        Log.Info($"winws started: {strategy.Name}, game filter {Settings.GameFilter}, hide driver {Settings.HideDriver}, " +
+                 $"Flowseal {engine.Version}, sha256 {FileSha256(_winwsPathOverride ?? engine.WinwsPath)}, args: {string.Join(' ', args)}");
+    }
+
+    /// <summary>Returns the winws.exe to run: the prepared hidden-driver copy when hiding is on, else null (the engine's own).
+    /// The previous mode's driver service is stopped first — both register the same WinDivert device and only one can load.</summary>
+    private string? ApplyDriverHiding(EngineLayout engine)
+    {
+        // Release any winws we already run so the driver has no open handle before its service is stopped;
+        // StartAsync stops it again, which is a no-op.
+        _runner.Stop();
+        StopDriverService(DriverHiding.ServiceToStop(Settings.HideDriver));
+        if (!Settings.HideDriver) return null;
+
+        DriverHiding.Prepare(engine.BinDir, AppPaths.DriverHideBinDir, AppPaths.DriverHidePatchedDll);
+        return Path.Combine(AppPaths.DriverHideBinDir, "winws.exe");
+    }
+
+    private static void StopDriverService(string name)
+    {
+        try
+        {
+            using var sc = new ServiceController(name);
+            if (sc.Status != ServiceControllerStatus.Stopped)
+            {
+                sc.Stop();
+                sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(10));
+                Log.Info($"Stopped driver service {name}");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Not installed, or not controllable (e.g. nobody holds it so it already unloaded): nothing to stop.
+        }
+        catch (System.ServiceProcess.TimeoutException ex)
+        {
+            Log.Error($"Driver service {name} did not stop in time", ex);
+        }
     }
 
     private IReadOnlyList<string> BuildArgs(StrategyDefinition strategy, IReadOnlyList<GameRule> gameRules)
