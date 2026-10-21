@@ -12,6 +12,11 @@ public sealed class AppSettings
     public string GameTcpRange { get; set; } = GameFilterOptions.DefaultRange;
     public string GameUdpRange { get; set; } = GameFilterOptions.DefaultRange;
 
+    /// <summary>Run winws with bol-van's windivert-hide (driver installed as "Monkey", file "Monkey64.sys") so a
+    /// game anti-cheat that only checks for the "WinDivert" service/file does not see it. Off by default; it does not
+    /// hide the driver's device name and carries an unknown ban risk, so the UI warns before turning it on.</summary>
+    public bool HideDriver { get; set; }
+
     /// <summary>Turn bypass on automatically when the app starts (used with autostart).</summary>
     public bool EnableOnStart { get; set; }
 
