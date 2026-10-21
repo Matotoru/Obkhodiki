@@ -31,7 +31,7 @@ internal sealed partial class AppController
         Line();
         Line("== Обход ==");
         Line($"Flowseal: {_engine?.Version ?? "не установлен"}; работает: {(_runner.IsRunning ? "да" : "нет")}");
-        Line($"Стратегия: {ActiveStrategyName}; игровой фильтр: {Settings.GameFilter}");
+        Line($"Стратегия: {ActiveStrategyName}; игровой фильтр: {Settings.GameFilter}; IPSet: {Settings.IpsetFilter}");
         var conflicts = ConflictDetector.Find(ConflictDetector.SnapshotCandidates(), RunningServices(), Environment.ProcessId);
         Line($"Другие обходы: {(conflicts.Any ? string.Join(", ", conflicts.Processes.Select(p => p.Name).Concat(conflicts.Services)) : "не найдены")}");
         Line();

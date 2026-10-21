@@ -287,6 +287,12 @@ internal sealed partial class AppController : IDisposable
             v => Settings.GameFilter = v,
             mode));
 
+    public Task SetIpsetFilterAsync(IpsetFilterMode mode) => Serialized("Смена фильтра IPSet…", silentErrors: false, () =>
+        ApplySettingWithRollback(
+            () => Settings.IpsetFilter,
+            v => Settings.IpsetFilter = v,
+            mode));
+
     /// <param name="full">Check every strategy; otherwise stop at the first one that opens all targets.</param>
     public Task AutoSelectAsync(IProgress<SelectionProgress>? uiProgress, CancellationToken ct, bool full = false) => Serialized("Подбор стратегии…", silentErrors: false, async () =>
     {
@@ -435,7 +441,7 @@ internal sealed partial class AppController : IDisposable
             Log.Error("winws could not be started", ex);
             throw new InvalidOperationException(EngineFiles.MissingMessage(new[] { "winws.exe" }, engine.BinDir), ex);
         }
-        Log.Info($"winws started: {strategy.Name}, game filter {Settings.GameFilter}, hide driver {Settings.HideDriver}, " +
+        Log.Info($"winws started: {strategy.Name}, game filter {Settings.GameFilter}, ipset {Settings.IpsetFilter}, hide driver {Settings.HideDriver}, " +
                  $"Flowseal {engine.Version}, sha256 {FileSha256(_winwsPathOverride ?? engine.WinwsPath)}, args: {string.Join(' ', args)}");
     }
 
@@ -481,7 +487,7 @@ internal sealed partial class AppController : IDisposable
         return StrategyArgsBuilder.Build(
             strategy,
             new EnginePaths(engine.BinDir, engine.ListsDir, AppPaths.UserLists),
-            new GameFilterOptions(Settings.GameFilter, Settings.GameTcpRange, Settings.GameUdpRange),
+            new GameFilterOptions(Settings.GameFilter, Settings.GameTcpRange, Settings.GameUdpRange, Settings.IpsetFilter),
             gameRules);
     }
 

@@ -11,6 +11,7 @@ public sealed class AppSettings
     public GameFilterMode GameFilter { get; set; } = GameFilterMode.Disabled;
     public string GameTcpRange { get; set; } = GameFilterOptions.DefaultRange;
     public string GameUdpRange { get; set; } = GameFilterOptions.DefaultRange;
+    public IpsetFilterMode IpsetFilter { get; set; } = IpsetFilterMode.Loaded;
 
     /// <summary>Run winws with bol-van's windivert-hide (driver installed as "Monkey", file "Monkey64.sys") so a
     /// game anti-cheat that only checks for the "WinDivert" service/file does not see it. Off by default; it does not
@@ -157,6 +158,7 @@ public sealed class AppSettingsStore
         if (!Enum.IsDefined(s.GameFilter)) s.GameFilter = GameFilterMode.Disabled;
         if (!IsValidRange(s.GameTcpRange)) s.GameTcpRange = GameFilterOptions.DefaultRange;
         if (!IsValidRange(s.GameUdpRange)) s.GameUdpRange = GameFilterOptions.DefaultRange;
+        if (!Enum.IsDefined(s.IpsetFilter)) s.IpsetFilter = IpsetFilterMode.Loaded;
         s.GameProfiles = Games.GameProfiles.Sanitize(s.GameProfiles);
         s.VpnProcesses = (s.VpnProcesses ?? new()).Where(p => p is not null && Vpn.SingBoxConfig.IsValidProcessName(p))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();

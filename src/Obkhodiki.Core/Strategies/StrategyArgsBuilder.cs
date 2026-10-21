@@ -10,22 +10,28 @@ public sealed record EnginePaths(string BinDir, string ListsDir, string UserList
 
 public enum GameFilterMode { Disabled, Tcp, Udp, All }
 
+/// <summary>Flowseal's "IPSet Filter" for blocks using ipset-all.txt: the full list, nothing, or every address.</summary>
+public enum IpsetFilterMode { Loaded, None, Any }
+
 public sealed record GameFilterOptions
 {
     public const string DefaultRange = "1024-65535";
 
     public static readonly GameFilterOptions Disabled = new(GameFilterMode.Disabled);
 
-    public GameFilterOptions(GameFilterMode mode, string tcpRange = DefaultRange, string udpRange = DefaultRange)
+    public GameFilterOptions(GameFilterMode mode, string tcpRange = DefaultRange, string udpRange = DefaultRange,
+        IpsetFilterMode ipset = IpsetFilterMode.Loaded)
     {
         ValidateRange(tcpRange);
         ValidateRange(udpRange);
         Mode = mode;
         TcpRange = tcpRange;
         UdpRange = udpRange;
+        Ipset = ipset;
     }
 
     public GameFilterMode Mode { get; }
+    public IpsetFilterMode Ipset { get; }
     public string TcpRange { get; }
     public string UdpRange { get; }
 
@@ -52,6 +58,8 @@ public static partial class StrategyArgsBuilder
     private static partial Regex Placeholder();
 
     private const string IpsetAllArg = "--ipset=%LISTS%ipset-all.txt";
+    // Flowseal's "none" placeholder (TEST-NET-3): the block matches no real address.
+    private const string IpsetNoneArg = "--ipset-ip=203.0.113.113/32";
 
     // Used when a strategy has no ipset-all blocks to copy the desync style from.
     private static readonly string[][] FallbackGameBlocks =
@@ -76,7 +84,8 @@ public static partial class StrategyArgsBuilder
             _ => InertPort,
         };
 
-        var args = strategy.Args.Select(arg => Resolve(arg, paths, tcp, udp, legacy)).ToList();
+        var args = strategy.Args.SelectMany(arg => ApplyIpsetMode(arg, game.Ipset))
+            .Select(arg => Resolve(arg, paths, tcp, udp, legacy)).ToList();
         if (rules is null || rules.Count == 0) return args;
 
         var templates = SplitBlocks(strategy.Args).Where(b => b.Any(IsIpsetAll)).ToList();
@@ -99,6 +108,14 @@ public static partial class StrategyArgsBuilder
     }
 
     private static bool IsIpsetAll(string arg) => arg.Equals(IpsetAllArg, StringComparison.OrdinalIgnoreCase);
+
+    // Game rule clones are built from the original args, so their own ipsets do not depend on this mode.
+    private static IEnumerable<string> ApplyIpsetMode(string arg, IpsetFilterMode mode)
+    {
+        if (!IsIpsetAll(arg) || mode == IpsetFilterMode.Loaded) return new[] { arg };
+        // "Any": no ipset restriction at all, which is what Flowseal's empty ipset-all.txt means.
+        return mode == IpsetFilterMode.None ? new[] { IpsetNoneArg } : Array.Empty<string>();
+    }
 
     private static List<string[]> SplitBlocks(IReadOnlyList<string> args)
     {

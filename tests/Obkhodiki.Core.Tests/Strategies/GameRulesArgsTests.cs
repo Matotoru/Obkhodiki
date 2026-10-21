@@ -176,4 +176,17 @@ public class GameRulesArgsTests
         Assert.Contains(args, a => a == "--ipset=" + GameIpset);
         Assert.Contains(args, a => a == "--filter-udp=7777-7800");
     }
+
+    [Fact]
+    public void IpsetNone_GameRulesStillUseTheirOwnIpset()
+    {
+        var args = StrategyArgsBuilder.Build(Strategy, Paths,
+            new GameFilterOptions(GameFilterMode.Disabled, ipset: IpsetFilterMode.None), new[] { Rule() });
+
+        Assert.DoesNotContain(args, a => a.Contains("ipset-all.txt"));
+        Assert.Equal(3, args.Count(a => a == "--ipset-ip=203.0.113.113/32"));
+        var gameBlocks = Blocks(args).Where(b => b.Contains("--ipset=" + GameIpset)).ToList();
+        Assert.Equal(3, gameBlocks.Count);
+        Assert.Contains(gameBlocks, b => b.Contains("--filter-udp=7777-7800"));
+    }
 }

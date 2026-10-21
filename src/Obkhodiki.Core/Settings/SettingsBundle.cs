@@ -99,6 +99,7 @@ public sealed class PortableSettings
     public GameFilterMode GameFilter { get; set; } = GameFilterMode.Disabled;
     public string GameTcpRange { get; set; } = GameFilterOptions.DefaultRange;
     public string GameUdpRange { get; set; } = GameFilterOptions.DefaultRange;
+    public IpsetFilterMode IpsetFilter { get; set; } = IpsetFilterMode.Loaded;
     public bool HideDriver { get; set; }
     public bool EnableOnStart { get; set; }
     public bool CheckUpdatesOnStart { get; set; } = true;
@@ -127,6 +128,7 @@ public sealed class PortableSettings
         GameFilter = s.GameFilter,
         GameTcpRange = s.GameTcpRange,
         GameUdpRange = s.GameUdpRange,
+        IpsetFilter = s.IpsetFilter,
         HideDriver = s.HideDriver,
         EnableOnStart = s.EnableOnStart,
         CheckUpdatesOnStart = s.CheckUpdatesOnStart,
@@ -157,6 +159,7 @@ public sealed class PortableSettings
         target.GameFilter = GameFilter;
         target.GameTcpRange = GameTcpRange;
         target.GameUdpRange = GameUdpRange;
+        target.IpsetFilter = IpsetFilter;
         target.HideDriver = HideDriver;
         target.EnableOnStart = EnableOnStart;
         target.CheckUpdatesOnStart = CheckUpdatesOnStart;

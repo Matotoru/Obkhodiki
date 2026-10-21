@@ -75,6 +75,41 @@ public class StrategyArgsBuilderTests
         Assert.Equal(new[] { "--filter-tcp=27000-27100", "--filter-udp=7000-8000" }, args);
     }
 
+    [Fact]
+    public void Build_IpsetLoaded_KeepsFullList()
+    {
+        var args = StrategyArgsBuilder.Build(
+            Strategy("--filter-tcp=80,443", "--ipset=%LISTS%ipset-all.txt", "--ipset-exclude=%LISTS%ipset-exclude.txt"),
+            Paths, GameFilterOptions.Disabled);
+
+        Assert.Equal(new[] { "--filter-tcp=80,443", @"--ipset=C:\eng\lists\ipset-all.txt", @"--ipset-exclude=C:\eng\lists\ipset-exclude.txt" }, args);
+    }
+
+    [Fact]
+    public void Build_IpsetNone_UsesFlowsealPlaceholderAddress()
+    {
+        var args = StrategyArgsBuilder.Build(
+            Strategy("--filter-tcp=80,443", "--ipset=%LISTS%ipset-all.txt", "--ipset-exclude=%LISTS%ipset-exclude.txt"),
+            Paths, new GameFilterOptions(GameFilterMode.Disabled, ipset: IpsetFilterMode.None));
+
+        Assert.Equal(new[] { "--filter-tcp=80,443", "--ipset-ip=203.0.113.113/32", @"--ipset-exclude=C:\eng\lists\ipset-exclude.txt" }, args);
+    }
+
+    [Fact]
+    public void Build_IpsetAny_DropsIpsetRestrictionOnly()
+    {
+        var args = StrategyArgsBuilder.Build(
+            Strategy("--filter-tcp=80,443", "--ipset=%LISTS%ipset-all.txt", "--ipset-exclude=%LISTS%ipset-exclude.txt", "--new",
+                "--hostlist=%LISTS%list-general.txt"),
+            Paths, new GameFilterOptions(GameFilterMode.Disabled, ipset: IpsetFilterMode.Any));
+
+        Assert.Equal(new[]
+        {
+            "--filter-tcp=80,443", @"--ipset-exclude=C:\eng\lists\ipset-exclude.txt", "--new",
+            @"--hostlist=C:\eng\lists\list-general.txt",
+        }, args);
+    }
+
     [Theory]
     [InlineData(GameFilterMode.Disabled, "12")]
     [InlineData(GameFilterMode.Tcp, "27000-27100")]

@@ -57,6 +57,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.13.0", new[]
+        {
+            "Фильтр IPSet как в Flowseal: «Обход» → «Фильтр IPSet» — полный список (как было), выключен (none) или все адреса (any). Профили игр работают в любом режиме, так что связка «игровой фильтр выключен + IPSet none» оставляет обход только для игр с профилем.",
+        }),
         new Entry("0.12.0", new[]
         {
             "WARP и DNS xbox-dns.ru работают без сервера VPS: если сервер не добавлен или VPS выключен, через WARP идут только выбранные категории и сайты, остальное — напрямую.",

@@ -37,6 +37,20 @@
 
       <ui:CardControl Margin="{StaticResource CardSpacing}">
         <ui:CardControl.Icon>
+          <ui:SymbolIcon Symbol="Filter24" />
+        </ui:CardControl.Icon>
+        <ui:CardControl.Header>
+          <StackPanel>
+            <TextBlock FontWeight="SemiBold" Text="Фильтр IPSet" />
+            <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap"
+                       Text="Как в Flowseal: к каким адресам применять правила по списку ipset-all. «Все адреса» может ломать другие сервисы. Профили игр на странице «Игры» работают в любом режиме." />
+          </StackPanel>
+        </ui:CardControl.Header>
+        <ComboBox MinWidth="240" DisplayMemberPath="Title" ItemsSource="{Binding IpsetFilterOptions}" SelectedItem="{Binding SelectedIpsetFilter}" IsEnabled="{Binding IsSelecting, Converter={StaticResource InverseBool}}" />
+      </ui:CardControl>
+
+      <ui:CardControl Margin="{StaticResource CardSpacing}">
+        <ui:CardControl.Icon>
           <ui:SymbolIcon Symbol="EyeOff24" />
         </ui:CardControl.Icon>
         <ui:CardControl.Header>

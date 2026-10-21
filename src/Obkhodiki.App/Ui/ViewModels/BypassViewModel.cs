@@ -8,6 +8,8 @@ namespace Obkhodiki.App.Ui.ViewModels;
 
 public sealed record GameFilterOption(GameFilterMode Mode, string Title);
 
+public sealed record IpsetFilterOption(IpsetFilterMode Mode, string Title);
+
 public sealed partial class StrategyScoreRow : ObservableObject
 {
     public required string Name { get; init; }
@@ -46,8 +48,16 @@ public sealed partial class BypassViewModel : ObservableObject
         new GameFilterOption(GameFilterMode.All, "TCP и UDP"),
     };
 
+    public IReadOnlyList<IpsetFilterOption> IpsetFilterOptions { get; } = new[]
+    {
+        new IpsetFilterOption(IpsetFilterMode.Loaded, "Полный список (loaded)"),
+        new IpsetFilterOption(IpsetFilterMode.None, "Выключен (none)"),
+        new IpsetFilterOption(IpsetFilterMode.Any, "Все адреса (any)"),
+    };
+
     [ObservableProperty] private string? _selectedStrategy;
     [ObservableProperty] private GameFilterOption? _selectedGameFilter;
+    [ObservableProperty] private IpsetFilterOption? _selectedIpsetFilter;
     [ObservableProperty] private bool _hideDriver;
     [ObservableProperty] private bool _isSelecting;
     [ObservableProperty] private double _progress;
@@ -68,6 +78,12 @@ public sealed partial class BypassViewModel : ObservableObject
     {
         if (_syncing || value is null) return;
         _ = _shell.RunAsync(c => c.SetGameFilterAsync(value.Mode));
+    }
+
+    partial void OnSelectedIpsetFilterChanged(IpsetFilterOption? value)
+    {
+        if (_syncing || value is null) return;
+        _ = _shell.RunAsync(c => c.SetIpsetFilterAsync(value.Mode));
     }
 
     partial void OnHideDriverChanged(bool value)
@@ -106,6 +122,7 @@ public sealed partial class BypassViewModel : ObservableObject
             }
             SelectedStrategy = c.ActiveStrategyName;
             SelectedGameFilter = GameFilterOptions.First(o => o.Mode == c.Settings.GameFilter);
+            SelectedIpsetFilter = IpsetFilterOptions.First(o => o.Mode == c.Settings.IpsetFilter);
             HideDriver = c.Settings.HideDriver;
             FlowsealVersion = c.Engine?.Version ?? "—";
             ProblemsCount = c.Engine?.Problems.Count ?? 0;
@@ -197,6 +214,7 @@ public sealed partial class BypassViewModel : ObservableObject
         foreach (var n in new[] { "general", "general (ALT)", "general (ALT2)", "general (FAKE TLS AUTO)", "general (SIMPLE FAKE)" }) Strategies.Add(n);
         SelectedStrategy = "general (ALT)";
         SelectedGameFilter = GameFilterOptions[0];
+        SelectedIpsetFilter = IpsetFilterOptions[0];
         FlowsealVersion = "1.10.3";
         Results.Add(new StrategyScoreRow { Name = "general", Passed = 9, Total = 12, AvgMs = 142, Failed = new[] { "DiscordGateway", "YouTubeVideoRedirect", "CloudflareCDN" } });
         Results.Add(new StrategyScoreRow { Name = "general (ALT)", Passed = 12, Total = 12, AvgMs = 118, IsBest = true });

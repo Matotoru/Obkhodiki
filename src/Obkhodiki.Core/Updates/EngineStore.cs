@@ -217,7 +217,7 @@ public sealed class EngineStore
     }
 
     // Flowseal ships ipset-all.txt as a one-line placeholder ("none" mode) with the real list in .backup.
-    // We always run in "loaded" mode: "any" makes game rules hit every IP and breaks unrelated services.
+    // The file always holds the full list; "none" and "any" are applied to the winws args (StrategyArgsBuilder).
     private static void ActivateFullIpset(string listsDir)
     {
         var active = Path.Combine(listsDir, "ipset-all.txt");
