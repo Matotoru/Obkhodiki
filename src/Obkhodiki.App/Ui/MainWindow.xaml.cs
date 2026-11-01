@@ -51,6 +51,7 @@ public partial class MainWindow
             "Bypass" => typeof(BypassPage),
             "Games" => typeof(GamesPage),
             "Vpn" => typeof(VpnPage),
+            "Warp" => typeof(WarpPage),
             "Telegram" => typeof(TelegramPage),
             "Settings" => typeof(SettingsPage),
             _ => typeof(HomePage),

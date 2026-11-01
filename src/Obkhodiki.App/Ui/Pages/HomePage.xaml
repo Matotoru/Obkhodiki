@@ -54,6 +54,29 @@
         </StackPanel>
       </ui:Card>
 
+      <!-- The same two switches for Cloudflare WARP. -->
+      <ui:Card Margin="0,0,0,12" Padding="16,12" Visibility="{Binding WarpInstalled, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <DockPanel>
+            <ui:ToggleSwitch DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="{Binding WarpEnabled}" OffContent="Выкл" OnContent="Вкл"
+                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+            <ui:SymbolIcon DockPanel.Dock="Left" Symbol="Cloud24" FontSize="22" Margin="4,0,16,0" VerticalAlignment="Center" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock FontWeight="SemiBold" Text="Cloudflare WARP" />
+              <TextBlock Style="{StaticResource Caption}" Text="Отдельный путь без своего сервера. Настройки сохраняются." />
+            </StackPanel>
+          </DockPanel>
+          <DockPanel Margin="42,10,0,0" Visibility="{Binding WarpEnabled, Converter={StaticResource BoolToVisibility}}">
+            <ui:ToggleSwitch DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="{Binding WarpFull}" OffContent="Выкл" OnContent="Вкл"
+                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="Весь трафик через WARP" />
+              <TextBlock Style="{StaticResource Caption}" Text="Только TCP, UDP идёт напрямую. Выключено — только выбранное на странице WARP." />
+            </StackPanel>
+          </DockPanel>
+        </StackPanel>
+      </ui:Card>
+
       <!-- Modules at a glance. -->
       <UniformGrid Columns="3" Margin="-6,0,-6,0">
         <ui:CardAction Margin="6" Command="{Binding NavigateCommand}" CommandParameter="Games">

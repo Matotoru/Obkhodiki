@@ -44,9 +44,13 @@ public sealed record SingBoxOptions(
     /// <summary>Local SOCKS5 port of the Cloudflare WARP client in proxy mode; null when WARP is not used.</summary>
     public int? WarpPort { get; init; }
 
-    /// <summary>Through WARP (domains and their subdomains, rule-sets).</summary>
+    /// <summary>Through WARP (domains and their subdomains, rule-sets, programs).</summary>
     public IReadOnlyList<string> WarpDomains { get; init; } = Array.Empty<string>();
     public IReadOnlyList<LocalRuleSet> WarpRuleSets { get; init; } = Array.Empty<LocalRuleSet>();
+    public IReadOnlyList<string> WarpProcesses { get; init; } = Array.Empty<string>();
+
+    /// <summary>Everything goes through WARP except <see cref="DirectProcesses"/> and <see cref="DirectRuleSets"/>.</summary>
+    public bool WarpFullTunnel { get; init; }
 
     /// <summary>
     /// Look names up through xbox-dns.ru: everything outside the VPS (or, in full-tunnel mode, what goes through
@@ -91,6 +95,10 @@ public static partial class SingBoxConfig
 
     /// <summary>The WARP client's own process: its tunnel to Cloudflare must not be captured again.</summary>
     public const string WarpProcess = "warp-svc.exe";
+
+    /// <summary>Where the WARP client connects: it must resolve even while WARP itself is down.</summary>
+    public const string WarpServiceDomain = "cloudflareclient.com";
+    public const string WarpDnsTag = "warp-dns";
 
     /// <summary>xbox-dns.ru smart DNS (DoH): for services that refuse Russia it answers with its own relays.</summary>
     public const string XboxDnsHost = "xbox-dns.ru";
@@ -174,6 +182,9 @@ public static partial class SingBoxConfig
         }
         warpDomains = warpDomains.Distinct().ToList();
         var warpSets = warp ? options.WarpRuleSets.DistinctBy(r => r.Tag).ToList() : new List<LocalRuleSet>();
+        var warpProcesses = warp ? ValidProcesses(options.WarpProcesses) : new List<string>();
+        var warpFull = options.WarpFullTunnel;
+        if (warpFull && (!warp || options.FullTunnel)) throw new ArgumentException("WARP full tunnel needs WARP and excludes VPS full tunnel.");
         foreach (var rs in options.ProxyRuleSets.Concat(options.DirectRuleSets).Concat(options.WarpRuleSets))
         {
             if (!RuleSetTag().IsMatch(rs.Tag) || !System.IO.Path.IsPathFullyQualified(rs.Path)) throw new ArgumentException($"Invalid rule-set '{rs.Tag}'.");
@@ -182,13 +193,13 @@ public static partial class SingBoxConfig
         var full = options.FullTunnel;
         // Sets that only matter in the active mode.
         var proxySets = full ? new List<LocalRuleSet>() : options.ProxyRuleSets.DistinctBy(r => r.Tag).ToList();
-        var directSets = full ? options.DirectRuleSets.DistinctBy(r => r.Tag).ToList() : new List<LocalRuleSet>();
+        var directSets = full || warpFull ? options.DirectRuleSets.DistinctBy(r => r.Tag).ToList() : new List<LocalRuleSet>();
         var proxyDnsSets = proxySets.Where(r => r.HasDomains).ToList();
         var directDnsSets = directSets.Where(r => r.HasDomains).ToList();
         // Lookups for what goes through the VPS are made through the VPS too.
         var remoteDns = full || domains.Count > 0 || proxyDnsSets.Count > 0;
         // Lookups must reach sing-box whenever it chooses the resolver: for the VPS, and for xbox-dns.
-        var hijackDns = remoteDns || options.XboxDns;
+        var hijackDns = remoteDns || options.XboxDns || warpFull;
 
         var inbounds = new JsonArray();
         if (options.Tun)
@@ -283,9 +294,10 @@ public static partial class SingBoxConfig
         if (bypassDomains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(bypassDomains), ["outbound"] = "direct" });
         if (bypassCidrs.Count > 0) rules.Add(new JsonObject { ["ip_cidr"] = LinkParsing.Array(bypassCidrs), ["outbound"] = "direct" });
         // WARP choices are explicit too: they beat the VPS lists, categories and full-tunnel mode.
-        if (warpDomains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(warpDomains), ["outbound"] = WarpTag });
-        if (warpSets.Count > 0) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(warpSets.Select(r => r.Tag)), ["outbound"] = WarpTag });
-        if (full)
+        if (warpProcesses.Count > 0) AddWarpRules(rules, "process_name", warpProcesses);
+        if (warpDomains.Count > 0) AddWarpRules(rules, "domain_suffix", warpDomains);
+        if (warpSets.Count > 0) AddWarpRules(rules, "rule_set", warpSets.Select(r => r.Tag));
+        if (full || warpFull)
         {
             rules.Add(new JsonObject { ["ip_is_private"] = true, ["outbound"] = "direct" });
             // Games set to "direct" (and the ones Auto measured faster direct) stay off the VPS.
@@ -296,11 +308,12 @@ public static partial class SingBoxConfig
         if (domains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(domains), ["outbound"] = ProxyTag });
         if (proxySets.Count > 0) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(proxySets.Select(r => r.Tag)), ["outbound"] = ProxyTag });
         if (directSets.Count > 0) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(directSets.Select(r => r.Tag)), ["outbound"] = "direct" });
+        if (warpFull) AddWarpUdpRules(rules, null, null);
 
         var route = new JsonObject
         {
             ["rules"] = rules,
-            ["final"] = full ? ProxyTag : "direct",
+            ["final"] = full ? ProxyTag : warpFull ? WarpTag : "direct",
             // Binds outgoing connections (including the tunnel itself) to the real adapter: no routing loop.
             ["auto_detect_interface"] = true,
             ["default_domain_resolver"] = "local",
@@ -322,7 +335,7 @@ public static partial class SingBoxConfig
             ["log"] = new JsonObject { ["level"] = "warn", ["timestamp"] = true, ["output"] = options.LogPath },
             ["dns"] = BuildDns(full, remoteDns, options.HostIpv6, domains, proxyDnsSets, directDnsSets,
                 options.LocalDnsDomains.Select(NormalizeDomain).Where(d => d is not null).Select(d => d!).Concat(bypassDomains).Distinct().ToList(),
-                options.XboxDns, warpDomains, warpSets.Where(r => r.HasDomains).ToList()),
+                options.XboxDns, warpDomains, warpSets.Where(r => r.HasDomains).ToList(), warpFull),
             ["inbounds"] = inbounds,
             ["outbounds"] = outbounds,
             ["route"] = route,
@@ -338,6 +351,29 @@ public static partial class SingBoxConfig
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
 
+    private static void AddWarpRules(JsonArray rules, string field, IEnumerable<string> values)
+    {
+        var list = values.ToList();
+        AddWarpUdpRules(rules, field, list);
+        rules.Add(new JsonObject { [field] = LinkParsing.Array(list), ["outbound"] = WarpTag });
+    }
+
+    // WARP's local proxy is TCP only: it answers UDP ASSOCIATE with "command not supported" (checked on client
+    // 2026.7). QUIC is refused so browsers move to TCP at once and stay on WARP; other UDP (games, calls) has no way
+    // through WARP and goes direct rather than being lost.
+    private static void AddWarpUdpRules(JsonArray rules, string? field, IReadOnlyList<string>? values)
+    {
+        var quic = new JsonObject { ["network"] = new JsonArray("udp"), ["port"] = new JsonArray(443), ["action"] = "reject" };
+        var udp = new JsonObject { ["network"] = new JsonArray("udp"), ["outbound"] = "direct" };
+        if (field is not null)
+        {
+            quic[field] = LinkParsing.Array(values!);
+            udp[field] = LinkParsing.Array(values!);
+        }
+        rules.Add(quic);
+        rules.Add(udp);
+    }
+
     private static List<string> ValidProcesses(IReadOnlyList<string> list)
     {
         var result = list.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -347,35 +383,33 @@ public static partial class SingBoxConfig
 
     private static JsonObject BuildDns(bool full, bool remoteDns, bool hostIpv6, List<string> domains, List<LocalRuleSet> proxySets,
         List<LocalRuleSet> directSets, List<string> localDomains, bool xbox = false, List<string>? warpDomains = null,
-        List<LocalRuleSet>? warpSets = null)
+        List<LocalRuleSet>? warpSets = null, bool warpFull = false)
     {
         var servers = new JsonArray(new JsonObject { ["type"] = "local", ["tag"] = "local" });
         var dns = new JsonObject
         {
             ["servers"] = servers,
             // xbox-dns answers for everything outside the VPS; in full-tunnel mode the VPS resolver stays the default.
-            ["final"] = full ? "remote" : xbox ? XboxDnsTag : "local",
+            // With everything through WARP, lookups go through it too unless xbox-dns answers for WARP traffic.
+            ["final"] = full ? "remote" : xbox ? XboxDnsTag : warpFull ? WarpDnsTag : "local",
             // Answers to apps: no AAAA at all without IPv6; with it, IPv4 first (many VPS have no IPv6 either).
             ["strategy"] = hostIpv6 ? "prefer_ipv4" : "ipv4_only",
         };
-        if (!remoteDns && !xbox) return dns;
+        if (!remoteDns && !xbox && !warpFull) return dns;
 
         if (remoteDns) servers.Add(new JsonObject { ["type"] = "https", ["tag"] = "remote", ["server"] = "1.1.1.1", ["detour"] = ProxyTag });
         // Reached directly (a Russian service); its own name comes from the local resolver.
         if (xbox) servers.Add(new JsonObject { ["type"] = "https", ["tag"] = XboxDnsTag, ["server"] = XboxDnsHost, ["domain_resolver"] = "local" });
+        if (warpFull && !xbox) servers.Add(new JsonObject { ["type"] = "https", ["tag"] = WarpDnsTag, ["server"] = "1.1.1.1", ["detour"] = WarpTag });
         var rules = new JsonArray();
         localDomains = xbox ? localDomains.Append(XboxDnsHost).Distinct().ToList() : localDomains;
+        if (warpFull) localDomains = localDomains.Append(WarpServiceDomain).Distinct().ToList();
         if (localDomains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(localDomains), ["server"] = "local" });
         // What goes through WARP is looked up through xbox-dns when it is on (the pair that opens Gemini).
         if (xbox && warpDomains is { Count: > 0 }) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(warpDomains), ["server"] = XboxDnsTag });
         if (xbox && warpSets is { Count: > 0 }) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(warpSets.Select(r => r.Tag)), ["server"] = XboxDnsTag });
-        if (!remoteDns)
-        {
-            if (rules.Count > 0) dns["rules"] = rules;
-            return dns;
-        }
-        if (domains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(domains), ["server"] = "remote" });
-        if (proxySets.Count > 0) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(proxySets.Select(r => r.Tag)), ["server"] = "remote" });
+        if (remoteDns && domains.Count > 0) rules.Add(new JsonObject { ["domain_suffix"] = LinkParsing.Array(domains), ["server"] = "remote" });
+        if (remoteDns && proxySets.Count > 0) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(proxySets.Select(r => r.Tag)), ["server"] = "remote" });
         // Russian sites resolve locally: their CDNs hand out the nearest (Russian) address.
         if (directSets.Count > 0) rules.Add(new JsonObject { ["rule_set"] = LinkParsing.Array(directSets.Select(r => r.Tag)), ["server"] = "local" });
         if (rules.Count > 0) dns["rules"] = rules;

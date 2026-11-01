@@ -43,6 +43,17 @@ public partial class VpnPage
     private void OnProgramsDropDown(object sender, EventArgs e) => ShellViewModel.Current.Vpn.RefreshRunningProgramsCommand.Execute(null);
 }
 
+public partial class WarpPage
+{
+    public WarpPage()
+    {
+        DataContext = ShellViewModel.Current.Warp;
+        InitializeComponent();
+    }
+
+    private void OnProgramsDropDown(object sender, EventArgs e) => ShellViewModel.Current.Vpn.RefreshRunningProgramsCommand.Execute(null);
+}
+
 public partial class TelegramPage
 {
     public TelegramPage()

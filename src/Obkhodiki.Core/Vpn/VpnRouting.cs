@@ -28,8 +28,12 @@ public sealed record VpnPlan(
     /// <summary>Through Cloudflare WARP (empty when WARP is off).</summary>
     public IReadOnlyList<string> WarpDomains { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> WarpCategories { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> WarpProcesses { get; init; } = Array.Empty<string>();
 
-    public bool UsesWarp => WarpDomains.Count > 0 || WarpCategories.Count > 0;
+    /// <summary>Everything goes through WARP except <see cref="DirectProcesses"/>, <see cref="DirectCategories"/> and the bypass lists.</summary>
+    public bool WarpFullTunnel { get; init; }
+
+    public bool UsesWarp => WarpFullTunnel || WarpDomains.Count > 0 || WarpCategories.Count > 0 || WarpProcesses.Count > 0;
 
     /// <summary>Names are looked up through xbox-dns.ru.</summary>
     public bool XboxDns { get; init; }
@@ -57,13 +61,23 @@ public sealed record VpnPlan(
         Processes = Array.Empty<string>(),
         Domains = Array.Empty<string>(),
         FullTunnel = false,
-        DirectProcesses = Array.Empty<string>(),
+        // WARP taking everything still has to leave this app, direct games and Russian sites alone.
+        DirectProcesses = WarpFullTunnel ? DirectProcesses : Array.Empty<string>(),
         ProxyCategories = Array.Empty<string>(),
-        DirectCategories = Array.Empty<string>(),
+        DirectCategories = WarpFullTunnel ? DirectCategories : Array.Empty<string>(),
     };
 
+    /// <summary>Everything goes somewhere other than direct, so what stays direct has to be listed.</summary>
+    public bool TakesEverything => FullTunnel || WarpFullTunnel;
+
+    /// <summary>Rule-set categories kept direct by the active mode.</summary>
+    public IReadOnlyList<string> ActiveDirectCategories => TakesEverything ? DirectCategories : Array.Empty<string>();
+
+    /// <summary>Rule-set categories sent through the VPS by the active mode.</summary>
+    public IReadOnlyList<string> ActiveProxyCategories => FullTunnel ? Array.Empty<string>() : ProxyCategories;
+
     /// <summary>Rule-set categories the active mode uses.</summary>
-    public IEnumerable<string> ActiveCategories => (FullTunnel ? DirectCategories : ProxyCategories).Concat(WarpCategories).Distinct();
+    public IEnumerable<string> ActiveCategories => ActiveDirectCategories.Concat(ActiveProxyCategories).Concat(WarpCategories).Distinct();
 
     /// <param name="autoVpnProcesses">Auto games a measurement sent through the VPS this session.</param>
     /// <param name="autoDecidedProcesses">Auto games measured this session (either way).</param>
@@ -98,7 +112,9 @@ public sealed record VpnPlan(
         processes.AddRange(autoVpnProcesses.Where(autoExes.Contains));
 
         // "Never through the VPS" beats every way a program can end up there (lists, game routes, Auto).
-        var bypass = settings.VpnBypassProcesses.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var warpFull = settings.WarpEnabled && settings.WarpFullTunnel && !settings.VpnFullTunnel;
+        var bypass = settings.VpnBypassProcesses.Concat(warpFull ? settings.WarpBypassProcesses : Enumerable.Empty<string>())
+            .Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var proxy = processes.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(p => !bypass.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
         return new VpnPlan(
@@ -108,14 +124,20 @@ public sealed record VpnPlan(
             direct.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase)
                 .Where(d => !proxy.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList(),
             RuleCatalog.Sanitize(settings.VpnProxyCategories, RuleCatalog.Proxy),
-            RuleCatalog.Sanitize(settings.VpnDirectCategories, RuleCatalog.Direct))
+            RuleCatalog.Sanitize(warpFull ? settings.WarpDirectCategories : settings.VpnDirectCategories, RuleCatalog.Direct))
         {
             BypassProcesses = bypass,
             ProxyMode = settings.VpnProxyMode,
             WarpDomains = settings.WarpEnabled ? settings.WarpDomains.ToList() : Array.Empty<string>(),
-            WarpCategories = settings.WarpEnabled ? RuleCatalog.Sanitize(settings.WarpCategories, RuleCatalog.Proxy) : Array.Empty<string>(),
+            // With everything going through WARP categories add nothing (the VPS treats its own the same way).
+            WarpCategories = settings.WarpEnabled && !warpFull ? RuleCatalog.Sanitize(settings.WarpCategories, RuleCatalog.Proxy) : Array.Empty<string>(),
+            WarpProcesses = settings.WarpEnabled
+                ? settings.WarpProcesses.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(p => !bypass.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList()
+                : Array.Empty<string>(),
+            WarpFullTunnel = warpFull,
             XboxDns = settings.XboxDnsEnabled,
-            BypassEntries = settings.VpnBypassEntries.Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList(),
+            BypassEntries = settings.VpnBypassEntries.Concat(warpFull ? settings.WarpBypassEntries : Enumerable.Empty<string>()).Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList(),
         };
     }
 }

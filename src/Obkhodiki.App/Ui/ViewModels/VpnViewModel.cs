@@ -80,7 +80,6 @@ public sealed partial class VpnViewModel : ObservableObject
     public bool HasSaved => SavedSources.Count > 0;
     public IReadOnlyList<CategoryOption> ProxyCategories { get; }
     public IReadOnlyList<CategoryOption> DirectCategories { get; }
-    public IReadOnlyList<CategoryOption> WarpCategories { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowConnectionMode))]
@@ -89,9 +88,6 @@ public sealed partial class VpnViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowConnectionMode))]
     private bool _xboxDns;
-    [ObservableProperty] private string _warpDomainsText = "";
-    [ObservableProperty] private bool _warpDirty;
-    public bool WarpInstalled => WarpClient.IsInstalled;
 
     [ObservableProperty] private bool _vpnEnabled = true;
     [ObservableProperty] private bool _fullTunnel;
@@ -153,7 +149,6 @@ public sealed partial class VpnViewModel : ObservableObject
         _shell = shell;
         ProxyCategories = RuleCatalog.Proxy.Select(c => new CategoryOption(c, ScheduleCategoriesApply)).ToList();
         DirectCategories = RuleCatalog.Direct.Select(c => new CategoryOption(c, ScheduleCategoriesApply)).ToList();
-        WarpCategories = RuleCatalog.Proxy.Select(c => new CategoryOption(c, () => WarpDirty = true)).ToList();
         // Several ticks in a row become one restart of the tunnel.
         _categoriesTimer.Tick += (_, _) =>
         {
@@ -189,18 +184,6 @@ public sealed partial class VpnViewModel : ObservableObject
         _ = _shell.RunAsync(c => c.SetVpnFullTunnelAsync(value));
     }
 
-    /// <summary>UI preview only: WARP and xbox-dns switched on.</summary>
-    internal void PreviewWarp()
-    {
-        _syncing = true;
-        WarpEnabled = true;
-        XboxDns = true;
-        foreach (var o in WarpCategories) o.IsChecked = o.Id == "ai";
-        WarpDomainsText = "gemini.google.com";
-        _syncing = false;
-        WarpDirty = false;
-    }
-
     /// <summary>UI preview only: proxy mode as it looks while running.</summary>
     internal void PreviewProxyMode()
     {
@@ -216,36 +199,10 @@ public sealed partial class VpnViewModel : ObservableObject
         _ = _shell.RunAsync(c => c.SetVpnProxyModeAsync(value == 1));
     }
 
-    partial void OnWarpEnabledChanged(bool value)
-    {
-        if (_syncing) return;
-        _ = _shell.RunAsync(c => c.SetWarpEnabledAsync(value));
-    }
-
     partial void OnXboxDnsChanged(bool value)
     {
         if (_syncing) return;
         _ = _shell.RunAsync(c => c.SetXboxDnsAsync(value));
-    }
-
-    partial void OnWarpDomainsTextChanged(string value)
-    {
-        if (!_syncing) WarpDirty = true;
-    }
-
-    [RelayCommand]
-    private async Task SaveWarpAsync()
-    {
-        var domains = WarpDomainsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
-        var bad = domains.Where(d => SingBoxConfig.NormalizeDomain(d) is null).ToList();
-        if (bad.Count > 0)
-        {
-            _shell.AddEvent("WARP", "Не похоже на адрес сайта: " + string.Join(", ", bad.Take(3)), EventKind.Error);
-            return;
-        }
-        var categories = WarpCategories.Where(o => o.IsChecked).Select(o => o.Id).ToList();
-        await _shell.RunAsync(c => c.SetWarpListsAsync(domains, categories));
-        WarpDirty = false;
     }
 
     partial void OnAutoBestChanged(bool value)
@@ -364,17 +321,6 @@ public sealed partial class VpnViewModel : ObservableObject
             ConnectionMode = c.Settings.VpnProxyMode ? 1 : 0;
             WarpEnabled = c.Settings.WarpEnabled;
             XboxDns = c.Settings.XboxDnsEnabled;
-            if (!WarpDirty)
-            {
-                foreach (var o in WarpCategories)
-                {
-                    o.Syncing = true;
-                    o.IsChecked = c.Settings.WarpCategories.Contains(o.Id);
-                    o.Syncing = false;
-                }
-                WarpDomainsText = string.Join(Environment.NewLine, c.Settings.WarpDomains);
-                WarpDirty = false;
-            }
             AutoBest = c.Settings.VpnAutoBest;
         }
         _syncing = false;

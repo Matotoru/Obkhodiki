@@ -201,50 +201,13 @@
           <StackPanel>
             <TextBlock FontWeight="SemiBold" Text="Весь трафик через VPS" />
             <TextBlock Style="{StaticResource Caption}"
-                       Text="Кроме российских сайтов и игр с маршрутом «Напрямую». Выключено — через VPS идёт только выбранное ниже." />
+                       Text="Кроме российских сайтов и игр с маршрутом «Напрямую». Отключает «Весь трафик через WARP». Выключено — через VPS идёт только выбранное ниже." />
           </StackPanel>
         </ui:CardControl.Header>
         <ui:ToggleSwitch IsChecked="{Binding FullTunnel}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
       </ui:CardControl>
 
-      <!-- Cloudflare WARP as a third path, and the xbox-dns.ru smart DNS. -->
-      <!-- Both work without the VPS too: then sing-box runs with only their rules. -->
-      <ui:CardExpander Margin="{StaticResource CardSpacing}">
-        <ui:CardExpander.Icon>
-          <ui:SymbolIcon Symbol="Cloud24" />
-        </ui:CardExpander.Icon>
-        <ui:CardExpander.Header>
-          <DockPanel>
-            <ui:ToggleSwitch DockPanel.Dock="Right" Margin="12,0,16,0" IsChecked="{Binding WarpEnabled}"
-                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
-            <StackPanel>
-              <TextBlock FontWeight="SemiBold" Text="Cloudflare WARP" />
-              <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap"
-                         Text="Третий путь рядом с «напрямую» и VPS: выбранные ниже сайты идут через установленный Cloudflare WARP (One Client). Работает и без VPS. Obkhodiki переводит его в режим прокси и при выключении возвращает прежний режим." />
-              <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource SystemFillColorCautionBrush}" Margin="0,2,0,0"
-                         Text="Cloudflare WARP не установлен — скачайте его с one.one.one.one"
-                         Visibility="{Binding WarpInstalled, Converter={StaticResource InverseBoolToVisibility}}" />
-            </StackPanel>
-          </DockPanel>
-        </ui:CardExpander.Header>
-        <StackPanel>
-          <TextBlock FontWeight="SemiBold" Text="Категории через WARP" />
-          <ItemsControl Margin="0,4,0,12" ItemsSource="{Binding WarpCategories}" ItemTemplate="{StaticResource CategoryTemplate}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <UniformGrid Columns="2" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-          </ItemsControl>
-          <TextBlock FontWeight="SemiBold" Text="Сайты через WARP" />
-          <TextBlock Margin="0,2,0,8" Style="{StaticResource Caption}" Text="По одному на строку, поддомены включаются. Эти сайты идут через WARP даже в режиме «весь трафик через VPS»." />
-          <ui:TextBox MinHeight="80" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
-                      PlaceholderText="gemini.google.com" Text="{Binding WarpDomainsText, UpdateSourceTrigger=PropertyChanged}" />
-          <ui:Button Margin="0,8,0,0" HorizontalAlignment="Right" Appearance="Primary" Content="Сохранить" Command="{Binding SaveWarpCommand}"
-                     IsEnabled="{Binding WarpDirty}" />
-        </StackPanel>
-      </ui:CardExpander>
-
+      <!-- The xbox-dns.ru smart DNS; works without the VPS too: then sing-box runs with only its rules. -->
       <ui:CardControl Margin="{StaticResource CardSpacing}">
         <ui:CardControl.Icon>
           <ui:SymbolIcon Symbol="Server24" />

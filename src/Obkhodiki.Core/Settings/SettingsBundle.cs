@@ -118,6 +118,11 @@ public sealed class PortableSettings
     public bool WarpEnabled { get; set; }
     public List<string> WarpDomains { get; set; } = new();
     public List<string> WarpCategories { get; set; } = new() { "ai" };
+    public List<string> WarpProcesses { get; set; } = new();
+    public bool WarpFullTunnel { get; set; }
+    public List<string> WarpDirectCategories { get; set; } = new() { "ru" };
+    public List<string> WarpBypassProcesses { get; set; } = new();
+    public List<string> WarpBypassEntries { get; set; } = new();
     public bool XboxDnsEnabled { get; set; }
     public string AppTheme { get; set; } = "system";
     public string AppPalette { get; set; } = "cat";
@@ -147,6 +152,11 @@ public sealed class PortableSettings
         WarpEnabled = s.WarpEnabled,
         WarpDomains = s.WarpDomains.ToList(),
         WarpCategories = s.WarpCategories.ToList(),
+        WarpProcesses = s.WarpProcesses.ToList(),
+        WarpFullTunnel = s.WarpFullTunnel,
+        WarpDirectCategories = s.WarpDirectCategories.ToList(),
+        WarpBypassProcesses = s.WarpBypassProcesses.ToList(),
+        WarpBypassEntries = s.WarpBypassEntries.ToList(),
         XboxDnsEnabled = s.XboxDnsEnabled,
         AppTheme = s.AppTheme,
         AppPalette = s.AppPalette,
@@ -178,6 +188,11 @@ public sealed class PortableSettings
         target.WarpEnabled = WarpEnabled;
         target.WarpDomains = WarpDomains ?? new();
         target.WarpCategories = WarpCategories ?? new();
+        target.WarpProcesses = WarpProcesses ?? new();
+        target.WarpFullTunnel = WarpFullTunnel;
+        target.WarpDirectCategories = WarpDirectCategories ?? new();
+        target.WarpBypassProcesses = WarpBypassProcesses ?? new();
+        target.WarpBypassEntries = WarpBypassEntries ?? new();
         target.XboxDnsEnabled = XboxDnsEnabled;
         target.AppTheme = AppTheme is "system" or "light" or "dark" ? AppTheme : "system";
         target.AppPalette = AppPalette is { Length: > 0 and <= 32 } p && p.All(c => char.IsAsciiLetterLower(c) || c == '-') ? p : "cat";

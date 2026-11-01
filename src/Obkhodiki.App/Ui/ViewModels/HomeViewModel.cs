@@ -25,6 +25,9 @@ public sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty] private bool _hasVpn;
     [ObservableProperty] private bool _vpnFull;
     [ObservableProperty] private bool _vpnEnabled = true;
+    [ObservableProperty] private bool _warpEnabled;
+    [ObservableProperty] private bool _warpFull;
+    public bool WarpInstalled => WarpClient.IsInstalled;
 
     public bool CanToggle => EngineReady && !IsBusy;
 
@@ -54,6 +57,18 @@ public sealed partial class HomeViewModel : ObservableObject
     {
         if (_syncing) return;
         _ = _shell.RunAsync(c => c.SetVpnFullTunnelAsync(value));
+    }
+
+    partial void OnWarpEnabledChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetWarpEnabledAsync(value));
+    }
+
+    partial void OnWarpFullChanged(bool value)
+    {
+        if (_syncing) return;
+        _ = _shell.RunAsync(c => c.SetWarpFullTunnelAsync(value));
     }
 
     partial void OnStrategyNameChanged(string value) => OnPropertyChanged(nameof(StatusSubtitle));
@@ -93,6 +108,8 @@ public sealed partial class HomeViewModel : ObservableObject
             {
                 VpnFull = c.Settings.VpnFullTunnel;
                 VpnEnabled = c.Settings.VpnEnabled;
+                WarpEnabled = c.Settings.WarpEnabled;
+                WarpFull = c.Settings.WarpFullTunnel;
             }
             var server = c.VpnServers.FirstOrDefault(s => s.Tag == c.ActiveServerTag)?.Server;
             var serverName = server is null ? "" : " · " + (server.Name ?? server.Host);

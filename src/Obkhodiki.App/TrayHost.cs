@@ -249,6 +249,20 @@ internal sealed class TrayHost : IDisposable
                 Enabled = _controller.BusyText is null,
             });
         }
+        if (WarpClient.IsInstalled)
+        {
+            var warpOn = _controller.Settings.WarpEnabled;
+            var warpFull = _controller.Settings.WarpFullTunnel;
+            _menu.Items.Add(new Forms.ToolStripMenuItem(warpOn ? "Выключить WARP" : "Включить WARP", null, async (_, _) => await _controller.SetWarpEnabledAsync(!warpOn))
+            {
+                Enabled = _controller.BusyText is null,
+            });
+            _menu.Items.Add(new Forms.ToolStripMenuItem("WARP: весь трафик", null, async (_, _) => await _controller.SetWarpFullTunnelAsync(!warpFull))
+            {
+                Checked = warpOn && warpFull,
+                Enabled = _controller.BusyText is null,
+            });
+        }
         if (_shell.Bypass.IsSelecting)
         {
             _menu.Items.Add(new Forms.ToolStripMenuItem("■ Остановить подбор стратегии", null, (_, _) => _shell.Bypass.CancelAutoSelect()));

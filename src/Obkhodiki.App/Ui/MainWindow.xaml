@@ -65,6 +65,11 @@
             <ui:SymbolIcon Symbol="Globe24" />
           </ui:NavigationViewItem.Icon>
         </ui:NavigationViewItem>
+        <ui:NavigationViewItem Content="WARP" NavigationCacheMode="Enabled" TargetPageType="{x:Type pages:WarpPage}">
+          <ui:NavigationViewItem.Icon>
+            <ui:SymbolIcon Symbol="Cloud24" />
+          </ui:NavigationViewItem.Icon>
+        </ui:NavigationViewItem>
         <ui:NavigationViewItem Content="Telegram" NavigationCacheMode="Enabled" TargetPageType="{x:Type pages:TelegramPage}">
           <ui:NavigationViewItem.Icon>
             <ui:SymbolIcon Symbol="Send24" />

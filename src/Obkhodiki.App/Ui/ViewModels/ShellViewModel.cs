@@ -26,6 +26,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public BypassViewModel Bypass { get; }
     public GamesViewModel Games { get; }
     public VpnViewModel Vpn { get; }
+    public WarpViewModel Warp { get; }
     public TelegramViewModel Telegram { get; }
     public SettingsViewModel Settings { get; }
 
@@ -50,6 +51,7 @@ public sealed partial class ShellViewModel : ObservableObject
         Bypass = new BypassViewModel(this);
         Games = new GamesViewModel(this);
         Vpn = new VpnViewModel(this);
+        Warp = new WarpViewModel(this);
         Telegram = new TelegramViewModel(this);
         Settings = new SettingsViewModel(this);
     }
@@ -71,6 +73,7 @@ public sealed partial class ShellViewModel : ObservableObject
         Bypass.Refresh(c);
         Games.Refresh(c);
         Vpn.Refresh(c);
+        Warp.Refresh(c);
         Telegram.Refresh(c);
         Settings.Refresh(c);
     }

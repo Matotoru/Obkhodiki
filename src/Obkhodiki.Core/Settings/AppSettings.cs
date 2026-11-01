@@ -86,6 +86,19 @@ public sealed class AppSettings
     /// <summary>Rule-set categories that go through WARP (ids from RuleCatalog.Proxy).</summary>
     public List<string> WarpCategories { get; set; } = new() { "ai" };
 
+    /// <summary>Programs whose TCP traffic goes through WARP.</summary>
+    public List<string> WarpProcesses { get; set; } = new();
+
+    /// <summary>Everything goes through WARP except what is kept direct below. Excludes <see cref="VpnFullTunnel"/>.</summary>
+    public bool WarpFullTunnel { get; set; }
+
+    /// <summary>Rule-set categories kept direct in WARP full-tunnel mode (ids from RuleCatalog.Direct).</summary>
+    public List<string> WarpDirectCategories { get; set; } = new() { "ru" };
+
+    /// <summary>Programs, and domains or IP/CIDR entries, kept direct in WARP full-tunnel mode.</summary>
+    public List<string> WarpBypassProcesses { get; set; } = new();
+    public List<string> WarpBypassEntries { get; set; } = new();
+
     /// <summary>Look up names through the xbox-dns.ru smart DNS (see SingBoxConfig.XboxDns).</summary>
     public bool XboxDnsEnabled { get; set; }
 
@@ -173,6 +186,15 @@ public sealed class AppSettingsStore
         s.WarpDomains = (s.WarpDomains ?? new()).Select(d => d is null ? null : Vpn.SingBoxConfig.NormalizeDomain(d))
             .Where(d => d is not null).Select(d => d!).Distinct().ToList();
         s.WarpCategories = Vpn.RuleCatalog.Sanitize(s.WarpCategories, Vpn.RuleCatalog.Proxy);
+        s.WarpProcesses = (s.WarpProcesses ?? new()).Where(p => p is not null && Vpn.SingBoxConfig.IsValidProcessName(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        s.WarpDirectCategories = Vpn.RuleCatalog.Sanitize(s.WarpDirectCategories, Vpn.RuleCatalog.Direct);
+        s.WarpBypassProcesses = (s.WarpBypassProcesses ?? new()).Where(p => p is not null && Vpn.SingBoxConfig.IsValidProcessName(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        s.WarpBypassEntries = (s.WarpBypassEntries ?? new()).Select(e => e is null ? null : Vpn.SingBoxConfig.NormalizeBypassEntry(e))
+            .Where(e => e is not null).Select(e => e!).Distinct().ToList();
+        // Only one path can take "everything"; a hand-edited or imported file may ask for both.
+        if (s.VpnFullTunnel) s.WarpFullTunnel = false;
         if (s.VpnSelectedServer is { } tag && !System.Text.RegularExpressions.Regex.IsMatch(tag, "^s-[0-9a-f]{10}$")) s.VpnSelectedServer = null;
         return s;
     }

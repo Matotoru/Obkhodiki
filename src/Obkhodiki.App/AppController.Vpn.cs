@@ -271,8 +271,10 @@ internal sealed partial class AppController
     public Task SetVpnFullTunnelAsync(bool on) => Serialized(on ? "Включение VPS…" : "Выключение VPS…", silentErrors: false, async () =>
     {
         if (_servers.Count == 0) throw new InvalidOperationException("Сначала добавьте сервер или подписку на странице «VPS».");
-        var (wasFull, wasEnabled) = (Settings.VpnFullTunnel, Settings.VpnEnabled);
+        var (wasFull, wasEnabled, wasWarpFull) = (Settings.VpnFullTunnel, Settings.VpnEnabled, Settings.WarpFullTunnel);
         Settings.VpnFullTunnel = on;
+        // Only one path can take everything.
+        if (on) Settings.WarpFullTunnel = false;
         // Asking for the whole connection through the VPS implies the VPS is on.
         if (on) Settings.VpnEnabled = true;
         _settingsStore.Save(Settings);
@@ -284,7 +286,7 @@ internal sealed partial class AppController
         catch
         {
             // The switch must not claim a mode that failed to start.
-            (Settings.VpnFullTunnel, Settings.VpnEnabled) = (wasFull, wasEnabled);
+            (Settings.VpnFullTunnel, Settings.VpnEnabled, Settings.WarpFullTunnel) = (wasFull, wasEnabled, wasWarpFull);
             _settingsStore.Save(Settings);
             throw;
         }
@@ -410,7 +412,7 @@ internal sealed partial class AppController
         var hostIpv6 = HostHasIpv6();
         var signature = $"{source?.Signature() ?? "no-vps"}|{tun}|proxy={proxyMode}|{plan.FullTunnel}|{string.Join(",", plan.Processes)}|{string.Join(",", plan.Domains)}|" +
                         $"{string.Join(",", plan.DirectProcesses)}|{string.Join(",", plan.BypassProcesses)}|{string.Join(",", plan.BypassEntries)}|" +
-                        $"{stamps}|v6={hostIpv6}|warp={string.Join(",", plan.WarpDomains)};{string.Join(",", plan.WarpCategories)}|xbox={plan.XboxDns}";
+                        $"{stamps}|v6={hostIpv6}|warp={plan.WarpFullTunnel};{string.Join(",", plan.WarpProcesses)};{string.Join(",", plan.WarpDomains)};{string.Join(",", plan.WarpCategories)}|xbox={plan.XboxDns}";
         if (IsVpnRunning && signature == _appliedSignature)
         {
             SyncSystemProxy();
@@ -429,10 +431,10 @@ internal sealed partial class AppController
             {
                 // The VPS must not go down with WARP: its sites take the usual route until the next apply.
                 Log.Error("Cloudflare WARP is not available", ex);
-                Notify?.Invoke("Cloudflare WARP", ex.Message + " Сайты WARP пока идут обычным путём.", ToolTipIcon.Warning);
+                Notify?.Invoke("Cloudflare WARP", ex.Message + " То, что шло через WARP, пока идёт обычным путём.", ToolTipIcon.Warning);
                 _warpActive = true; // may have been switched to proxy mode: give it back on the next release
                 await ReleaseWarpAsync();
-                plan = plan with { WarpDomains = Array.Empty<string>(), WarpCategories = Array.Empty<string>() };
+                plan = plan with { WarpDomains = Array.Empty<string>(), WarpCategories = Array.Empty<string>(), WarpProcesses = Array.Empty<string>(), WarpFullTunnel = false };
                 warpSets = new List<LocalRuleSet>();
                 // The next apply (any settings change, a restart) tries WARP again.
                 signature += "|warp-failed";
@@ -463,7 +465,7 @@ internal sealed partial class AppController
         _appliedSignature = signature;
         _appliedLaunch = launch;
         SyncSystemProxy();
-        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {source?.Describe() ?? "no VPS (WARP/xbox-dns only)"}, tunnel {tun}, proxy {launch.ProxyPort?.ToString() ?? "off"}, full {plan.FullTunnel}, ipv6 {hostIpv6}, " +
+        Log.Info($"sing-box {_sbStore.ActiveVersion} started: {source?.Describe() ?? "no VPS (WARP/xbox-dns only)"}, tunnel {tun}, proxy {launch.ProxyPort?.ToString() ?? "off"}, full {plan.FullTunnel}, warp {launch.WarpPort is not null} (full {plan.WarpFullTunnel}, processes {plan.WarpProcesses.Count}), ipv6 {hostIpv6}, " +
                  $"processes [{string.Join(", ", plan.Processes)}], domains {plan.Domains.Count}, rule-sets [{string.Join(", ", proxySets.Concat(directSets).Select(r => r.Tag))}]");
         Changed();
     }
@@ -479,7 +481,7 @@ internal sealed partial class AppController
         var warp = new List<LocalRuleSet>();
         var stamps = new StringBuilder();
         var missing = new List<string>();
-        foreach (var (ids, target) in new[] { (plan.FullTunnel ? plan.DirectCategories : Array.Empty<string>(), direct), (plan.FullTunnel ? Array.Empty<string>() : plan.ProxyCategories, proxy), (plan.WarpCategories, warp) })
+        foreach (var (ids, target) in new[] { (plan.ActiveDirectCategories, direct), (plan.ActiveProxyCategories, proxy), (plan.WarpCategories, warp) })
         {
             foreach (var category in ids.Select(RuleCatalog.Find).Where(c => c is not null).Select(c => c!))
             {
@@ -628,6 +630,8 @@ internal sealed partial class AppController
             WarpPort = launch.WarpPort,
             WarpDomains = plan.WarpDomains,
             WarpRuleSets = launch.WarpSets,
+            WarpProcesses = plan.WarpProcesses,
+            WarpFullTunnel = plan.WarpFullTunnel,
             XboxDns = plan.XboxDns,
         };
         return SingBoxConfig.Build(launch.Servers, launch.ActiveTag, options);
@@ -814,6 +818,9 @@ internal sealed partial class AppController
         }
     }
 
+    /// <summary>WARP is connected in proxy mode for this app.</summary>
+    public bool IsWarpActive => _warpActive && IsVpnRunning;
+
     private async Task ReleaseWarpAsync()
     {
         if (!_warpActive) return;
@@ -844,11 +851,47 @@ internal sealed partial class AppController
         }
     });
 
-    public Task SetWarpListsAsync(IReadOnlyList<string> domains, IReadOnlyList<string> categories) =>
+    /// <summary>"Весь трафик через WARP": everything except what is kept direct; takes over from the VPS full tunnel.</summary>
+    public Task SetWarpFullTunnelAsync(bool on) => Serialized(on ? "Подключение Cloudflare WARP…" : "Настройка WARP…", silentErrors: false, async () =>
+    {
+        if (on && !WarpClient.IsInstalled)
+        {
+            throw new InvalidOperationException("Cloudflare WARP не установлен. Установите его с https://one.one.one.one (приложение можно не запускать) и включите снова.");
+        }
+        var (wasFull, wasEnabled, wasVpnFull) = (Settings.WarpFullTunnel, Settings.WarpEnabled, Settings.VpnFullTunnel);
+        Settings.WarpFullTunnel = on;
+        if (on)
+        {
+            // Asking for the whole connection through WARP implies WARP is on, and only one path can take everything.
+            Settings.WarpEnabled = true;
+            Settings.VpnFullTunnel = false;
+        }
+        _settingsStore.Save(Settings);
+        try
+        {
+            await ApplyVpnCoreAsync(interactive: true, needProbe: false);
+            if (on && !_warpActive) throw new InvalidOperationException("WARP не подключился.");
+        }
+        catch
+        {
+            // The switch must not claim a mode that failed to start.
+            (Settings.WarpFullTunnel, Settings.WarpEnabled, Settings.VpnFullTunnel) = (wasFull, wasEnabled, wasVpnFull);
+            _settingsStore.Save(Settings);
+            await ApplyVpnCoreAsync(interactive: false, needProbe: false);
+            throw;
+        }
+    });
+
+    public Task SetWarpListsAsync(IReadOnlyList<string> processes, IReadOnlyList<string> domains, IReadOnlyList<string> categories,
+        IReadOnlyList<string> directCategories, IReadOnlyList<string> bypassProcesses, IReadOnlyList<string> bypassEntries) =>
         Serialized("Настройка WARP…", silentErrors: false, async () =>
         {
+            Settings.WarpProcesses = processes.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             Settings.WarpDomains = domains.Select(SingBoxConfig.NormalizeDomain).Where(d => d is not null).Select(d => d!).Distinct().ToList();
             Settings.WarpCategories = RuleCatalog.Sanitize(categories, RuleCatalog.Proxy);
+            Settings.WarpDirectCategories = RuleCatalog.Sanitize(directCategories, RuleCatalog.Direct);
+            Settings.WarpBypassProcesses = bypassProcesses.Where(SingBoxConfig.IsValidProcessName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            Settings.WarpBypassEntries = bypassEntries.Select(SingBoxConfig.NormalizeBypassEntry).Where(e => e is not null).Select(e => e!).Distinct().ToList();
             _settingsStore.Save(Settings);
             await ApplyVpnCoreAsync(interactive: true, needProbe: false);
         });
