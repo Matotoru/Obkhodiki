@@ -235,6 +235,10 @@ internal sealed class TrayHost : IDisposable
         {
             Enabled = ready,
         });
+        _menu.Items.Add(new Forms.ToolStripMenuItem("Остановить обход полностью", null, async (_, _) => await _controller.KillAllAsync())
+        {
+            Enabled = !busy && !_shell.Bypass.IsSelecting,
+        });
         if (_controller.VpnServerName is not null)
         {
             var enabled = _controller.Settings.VpnEnabled;

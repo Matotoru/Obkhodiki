@@ -57,6 +57,10 @@ public static class Changelog
     /// <summary>Newest first. Add an entry with every release.</summary>
     public static IReadOnlyList<Entry> Entries { get; } = new[]
     {
+        new Entry("0.15.0", new[]
+        {
+            "Кнопка «Остановить полностью» («Обход» и трей): завершает winws, запись игр и другие обходы (winws, GoodbyeDPI и их службы), затем выгружает драйвер WinDivert. Обход остаётся выключенным, VPS и WARP продолжают работать.",
+        }),
         new Entry("0.14.0", new[]
         {
             "Cloudflare WARP теперь на отдельной странице и умеет то же, что VPS: весь трафик через WARP (кроме российских сайтов и того, что вы оставите напрямую) или выбранные программы, сайты и категории. Переключатели есть также на главной и в трее.",

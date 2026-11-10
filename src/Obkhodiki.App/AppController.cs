@@ -263,6 +263,39 @@ internal sealed partial class AppController : IDisposable
         _settingsStore.Save(Settings);
     });
 
+    /// <summary>
+    /// Stops everything that uses WinDivert: our winws and game recording, any other winws/GoodbyeDPI with their
+    /// services, then unloads the driver. Bypass stays off until turned on again.
+    /// </summary>
+    public Task KillAllAsync() => Serialized("Полная остановка…", silentErrors: false, async () =>
+    {
+        _bypassWantedAfterLearning = false;
+        Settings.EnableOnStart = false;
+        _settingsStore.Save(Settings);
+        if (_learningSession is { } session)
+        {
+            _learningSession = null;
+            _learningRule = null;
+            await Task.Run(session.Dispose);
+            Log.Info($"Learning stopped by full stop: {session.Learner.Addresses.Count} addresses");
+        }
+        await Task.Run(_runner.Stop);
+        var report = await Task.Run(() => ConflictDetector.Find(
+            ConflictDetector.SnapshotCandidates().ToList(), RunningServiceNames(), _runner.ProcessId));
+        await Task.Run(() => StopConflicts(report));
+        // The driver unloads only once nobody holds it, so its services are stopped last.
+        await Task.Run(() =>
+        {
+            StopDriverService(DriverHiding.StandardService);
+            StopDriverService(DriverHiding.HiddenService);
+        });
+        var foreign = report.Services.Select(s => $"служба {s}").Concat(report.Processes.Select(p => $"{p.Name}.exe")).ToList();
+        Log.Info("Full stop done" + (foreign.Count > 0 ? ": also stopped " + string.Join(", ", foreign) : ""));
+        Notify?.Invoke("Обход остановлен полностью",
+            foreign.Count > 0 ? "Также остановлены: " + string.Join(", ", foreign) + ". Драйвер WinDivert выгружен." : "Драйвер WinDivert выгружен.",
+            ToolTipIcon.Info);
+    });
+
     public Task SelectStrategyAsync(string name) => Serialized("Смена стратегии…", silentErrors: false, () =>
         ApplySettingWithRollback(
             () => Settings.SelectedStrategy,

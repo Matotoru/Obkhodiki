@@ -202,6 +202,9 @@ public sealed partial class BypassViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private Task KillAllAsync() => _shell.RunAsync(c => c.KillAllAsync());
+
+    [RelayCommand]
     private static void OpenTargets() => ShellActions.OpenInNotepad(AppPaths.Targets);
 
     [RelayCommand]
